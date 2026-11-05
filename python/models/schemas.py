@@ -12,7 +12,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from datetime import date
 
 
 # ━━━━━━━━━━━━━━━━━━ 枚举 ━━━━━━━━━━━━━━━━━━
@@ -35,6 +36,7 @@ class PlanningState(str, Enum):
     ADJUSTING = "adjusting"
     COMPLETED = "completed"
     FAILED = "failed"
+    INFEASIBLE = "infeasible"
 
 
 # ━━━━━━━━━━━━━━━━━━ 用户偏好 ━━━━━━━━━━━━━━━━━━
@@ -43,7 +45,7 @@ class PlanningState(str, Enum):
 class UserPreferences(BaseModel):
     budget: float = Field(..., gt=0, description="总预算（人民币元）")
     travel_style: TravelStyle = Field(default=TravelStyle.COMFORT)
-    departure_city: str = Field(..., description="出发城市")
+    departure_city: str = Field(..., min_length=1, max_length=80, description="出发城市")
     start_date: str = Field(..., description="出发日期 YYYY-MM-DD")
     end_date: str = Field(..., description="返回日期 YYYY-MM-DD")
     num_travelers: int = Field(default=1, ge=1)
@@ -51,6 +53,15 @@ class UserPreferences(BaseModel):
     dietary_restrictions: list[str] = Field(default_factory=list)
     accessibility_needs: list[str] = Field(default_factory=list)
     notes: str = Field(default="", description="额外备注")
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        start, end = date.fromisoformat(self.start_date), date.fromisoformat(self.end_date)
+        if not 1 <= (end - start).days <= 30:
+            raise ValueError("Travel duration must be between 1 and 30 nights")
+        if self.num_travelers > 20:
+            raise ValueError("At most 20 travelers are supported")
+        return self
 
 
 # ━━━━━━━━━━━━━━━━━━ 目的地 ━━━━━━━━━━━━━━━━━━

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Travel Agent · 规划实验室</title>
+<style>
+:root{font-family:system-ui,"Microsoft YaHei",sans-serif;color:#183a35;background:#f2f5ef}
+*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:48px auto;padding:0 24px}
+small{color:#64766c;letter-spacing:2px}h1{font-size:38px;margin:10px 0}p{line-height:1.8;color:#64766c}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:24px;margin-top:28px}
+section{background:white;border:1px solid #d9e3d9;border-radius:16px;padding:24px}
+label{display:block;margin:14px 0 6px;font-size:14px}input,select{width:100%;padding:10px;border:1px solid #cdd8cc;border-radius:7px;font:inherit;background:white}
+button{border:0;border-radius:7px;padding:12px 18px;font:inherit;background:#185e4b;color:white;cursor:pointer;margin-top:18px}button:disabled{opacity:.5;cursor:wait}
+.secondary{background:#edf2e9;color:#185e4b}.status{font-size:13px;padding:7px 12px;border-radius:20px;background:#edf2e9;display:inline-block}
+ol{padding-left:24px;line-height:2;color:#64766c}pre{white-space:pre-wrap;word-break:break-word;font:13px/1.6 ui-monospace,monospace;background:#f5f7f2;padding:16px;border-radius:8px;max-height:560px;overflow:auto}
+@media(max-width:750px){.grid{grid-template-columns:1fr}main{margin:24px auto}h1{font-size:28px}}
+</style>
+<main>
+<small>TRAVEL AGENT / PYTHON</small>
+<h1>把旅行需求，变成一份计划。</h1>
+<p>偏好收集、目的地推荐、并行比选与预算检查。当前为演示数据；机票与酒店不可用于预订。</p>
+<div class="grid">
+<section>
+<form id="planner">
+<label for="departure">出发城市</label><input id="departure" value="北京" required maxlength="80">
+<label for="budget">总预算 / 元</label><input id="budget" type="number" min="1" value="15000" required>
+<label for="start">出发日期</label><input id="start" type="date" required>
+<label for="end">返回日期</label><input id="end" type="date" required>
+<label for="travelers">出行人数</label><input id="travelers" type="number" min="1" max="20" value="1" required>
+<label for="style">旅行风格</label><select id="style"><option value="comfort">舒适</option><option value="budget">经济</option><option value="cultural">文化</option><option value="luxury">豪华</option><option value="adventure">探险</option><option value="relaxation">休闲</option></select>
+<label for="question">希望了解什么</label><input id="question" value="文化 美食 景点 预算" maxlength="1000">
+<label for="key">访问密钥（如已配置）</label><input id="key" type="password" autocomplete="off">
+<button id="submit" type="submit">生成旅行计划</button>
+</form>
+</section>
+<section aria-live="polite">
+<span class="status" id="status">等待创建任务</span>
+<h2>执行过程</h2><ol id="events"><li>填写旅行偏好，开始规划。</li></ol>
+<button class="secondary" id="reconnect" disabled>重连进度流</button>
+<button class="secondary" id="refresh" disabled>查看任务结果</button>
+<pre id="result">计划、费用明细和资料来源将展示在这里。</pre>
+</section>
+</div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let taskId, cursor = 0, controller;
+const labels = {preferences:'整理旅行偏好',destination:'推荐目的地',flight_result:'比较航班',hotel_result:'匹配酒店',activity_result:'安排每日活动',knowledge:'检索旅行资料',budget:'校验预算',adjust:'选择更便宜的候选',summarize:'整理资料与引用'};
+const start = new Date(); start.setDate(start.getDate()+7);
+const end = new Date(start); end.setDate(end.getDate()+4);
+$('start').value = start.toISOString().slice(0,10); $('end').value = end.toISOString().slice(0,10);
+function headers(extra={}) {return {...extra,...($('key').value ? {'X-API-Key':$('key').value} : {})};}
+async function api(path, options={}) {
+  const response = await fetch(path,{...options,headers:headers(options.headers)});
+  if (!response.ok) throw new Error(await response.text());
+  return response;
+}
+async function loadResult() {
+  const task = await (await api('/api/tasks/'+taskId)).json();
+  $('status').textContent = task.status;
+  $('result').textContent = JSON.stringify(task.result || {status:task.status,node:task.node,error:task.error},null,2);
+}
+async function connect() {
+  if (controller) controller.abort();
+  const active = new AbortController(); controller = active;
+  try {
+    const response = await api('/api/tasks/'+taskId+'/events', {signal:active.signal,headers:{'Last-Event-ID':String(cursor)}});
+    const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer='';
+    while (true) {
+      const {done,value} = await reader.read(); if(done) break;
+      buffer += decoder.decode(value,{stream:true}).replace(/\r\n/g,'\n');
+      let boundary;
+      while ((boundary=buffer.indexOf('\n\n')) >= 0) {
+        const block=buffer.slice(0,boundary); buffer=buffer.slice(boundary+2);
+        if(block.startsWith(':')) continue;
+        const lines=block.split('\n');
+        const id=lines.find(l=>l.startsWith('id:'));
+        const kind=lines.find(l=>l.startsWith('event:'))?.slice(6).trim();
+        const raw=lines.filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('\n');
+        if(id) cursor=Number(id.slice(3));
+        const data=raw ? JSON.parse(raw) : {};
+        const li=document.createElement('li'); li.textContent=labels[data.node] || kind; $('events').append(li);
+        $('status').textContent=kind;
+      }
+    }
+    await loadResult();
+  } catch(error) {if(error.name!=='AbortError') $('status').textContent='进度连接中断，可重连：'+error.message;}
+}
+$('planner').addEventListener('submit', async event => {
+  event.preventDefault(); $('submit').disabled=true;
+  try {
+    const response=await api('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget:Number($('budget').value),departure_city:$('departure').value,start_date:$('start').value,end_date:$('end').value,num_travelers:Number($('travelers').value),travel_style:$('style').value,knowledge_question:$('question').value})});
+    const task=await response.json(); taskId=task.task_id; cursor=0; $('events').replaceChildren();
+    $('reconnect').disabled=false; $('refresh').disabled=false; await connect();
+  } catch(error) {$('status').textContent=error.message;} finally {$('submit').disabled=false;}
+});
+$('reconnect').onclick=connect;
+$('refresh').onclick=()=>loadResult().catch(error=>{$('status').textContent=error.message;});
+</script>
+</html>

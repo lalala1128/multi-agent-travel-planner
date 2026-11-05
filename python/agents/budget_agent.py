@@ -68,9 +68,9 @@ class BudgetAgent(BaseAgent):
                 f"进入第 {state.adjustment_round} 轮调整"
             )
         else:
-            state.state = PlanningState.COMPLETED
+            state.state = PlanningState.INFEASIBLE
             state.error_messages.append(
-                f"经过 {state.max_adjustments} 轮调整仍超预算 ¥{over_amount:.0f}，返回当前最优方案"
+                f"经过 {state.max_adjustments} 轮调整仍超预算 ¥{over_amount:.0f}，返回当前候选方案"
             )
             logger.warning(f"[{self.name}] 达到最大调整次数, 返回当前方案")
 
@@ -95,27 +95,47 @@ class BudgetAgent(BaseAgent):
 
     @staticmethod
     def _apply_adjustments(state: TravelPlanState) -> None:
-        """根据当前调整轮次，渐进式降低花费。"""
+        """Select cheaper existing candidates; never invent discounts or re-search away changes."""
         round_num = state.adjustment_round
-        over = state.budget_breakdown.over_budget_amount if state.budget_breakdown else 0
+        travelers = state.preferences.num_travelers
 
         if round_num == 1 and state.activity_result:
-            cut_ratio = min(0.4, over / max(state.activity_result.total_activity_cost, 1))
+            from agents.activity_agent import ActivityAgent
+            from models.schemas import Activity
+            pool = ActivityAgent._get_activity_pool(state.selected_destination.city)
             for day in state.activity_result.day_plans:
-                for act in day.activities:
-                    act.price *= (1 - cut_ratio)
-                day.day_cost *= (1 - cut_ratio)
-            state.activity_result.total_activity_cost *= (1 - cut_ratio)
+                alternatives = []
+                for activity in day.activities:
+                    candidates = [item for item in pool if item["time_slot"] == activity.time_slot]
+                    cheapest = min(candidates, key=lambda item: item["price"], default=None)
+                    alternatives.append(
+                        Activity(**cheapest) if cheapest and cheapest["price"] < activity.price
+                        else activity
+                    )
+                day.activities = alternatives
+                day.day_cost = sum(item.price for item in alternatives) * travelers
+            state.activity_result.total_activity_cost = sum(
+                day.day_cost for day in state.activity_result.day_plans
+            )
 
         elif round_num == 2 and state.hotel_result and state.hotel_result.recommended:
-            cut_ratio = min(0.35, over / max(state.hotel_result.total_hotel_cost, 1))
-            state.hotel_result.recommended.price_per_night *= (1 - cut_ratio)
-            state.hotel_result.total_hotel_cost *= (1 - cut_ratio)
+            result = state.hotel_result
+            cheapest = min(result.hotels, key=lambda hotel: hotel.price_per_night, default=None)
+            if cheapest and cheapest.price_per_night < result.recommended.price_per_night:
+                result.recommended = cheapest.model_copy(deep=True)
+            result.total_hotel_cost = (
+                result.recommended.price_per_night * result.total_nights * ((travelers + 1) // 2)
+            )
 
         elif round_num >= 3 and state.flight_result:
-            cut_ratio = min(0.25, over / max(state.flight_result.total_flight_cost, 1))
-            if state.flight_result.recommended_outbound:
-                state.flight_result.recommended_outbound.price *= (1 - cut_ratio)
-            if state.flight_result.recommended_return:
-                state.flight_result.recommended_return.price *= (1 - cut_ratio)
-            state.flight_result.total_flight_cost *= (1 - cut_ratio)
+            result = state.flight_result
+            for field, candidates in [
+                ("recommended_outbound", result.outbound_flights),
+                ("recommended_return", result.return_flights),
+            ]:
+                if candidates:
+                    setattr(result, field, min(candidates, key=lambda f: f.price).model_copy(deep=True))
+            result.total_flight_cost = sum(
+                flight.price for flight in [result.recommended_outbound, result.recommended_return]
+                if flight is not None
+            ) * travelers

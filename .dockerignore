@@ -1,0 +1,14 @@
+.git
+.venv
+.python
+.uv-cache
+.pip-cache
+.tmp
+.env
+data
+reports
+java
+golang
+**/__pycache__
+.pytest_cache
+.ruff_cache

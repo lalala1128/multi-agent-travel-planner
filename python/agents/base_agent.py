@@ -38,6 +38,7 @@ class BaseAgent(ABC):
         except Exception as exc:
             logger.error(f"[{self.name}] 执行失败: {exc}")
             state.error_messages.append(f"{self.name}: {str(exc)}")
+            raise
         return state
 
     # ── 子类必须实现 ────────────────────────────

@@ -116,7 +116,7 @@ with col2:
             for msg in state.error_messages:
                 st.warning(msg)
     else:
-        st.info("👈 请在左侧填写旅行偏好，然后点击"开始规划"")
+        st.info('请在左侧填写旅行偏好，然后点击“开始规划”')
 
         st.subheader("🏗️ 系统架构")
         st.markdown("""

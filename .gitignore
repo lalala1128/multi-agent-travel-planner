@@ -72,3 +72,12 @@ data/
 
 # Go binary
 golang/bin/
+
+# Local tools, databases and generated reports
+.uv-cache/
+.ruff_cache/
+.pytest_cache/
+reports/
+.pip-cache/
+.tmp/
+.python/

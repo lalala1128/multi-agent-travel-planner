@@ -30,7 +30,7 @@ class BudgetLoopController:
     ):
         self.parallel_executor = parallel_executor
         self.budget_agent = budget_agent or BudgetAgent()
-        self.max_retries = max_retries or settings.BUDGET_MAX_RETRIES
+        self.max_retries = settings.BUDGET_MAX_RETRIES if max_retries is None else max_retries
 
     async def run(self, state: TravelPlanState) -> TravelPlanState:
         state.max_adjustments = self.max_retries
@@ -39,8 +39,10 @@ class BudgetLoopController:
             label = "初始搜索" if attempt == 0 else f"第 {attempt} 轮调整"
             logger.info(f"[BudgetLoop] ── {label} ──")
 
-            if attempt == 0 or state.state == PlanningState.ADJUSTING:
+            if attempt == 0:
                 state = await self.parallel_executor.run(state)
+                if state.state == PlanningState.FAILED:
+                    return state
 
             state.state = PlanningState.BUDGET_CHECKING
             state = await self.budget_agent.run(state)
@@ -49,10 +51,10 @@ class BudgetLoopController:
                 logger.info(f"[BudgetLoop] 在第 {attempt} 轮完成 (共尝试 {attempt + 1} 次)")
                 return state
 
-            if state.state == PlanningState.FAILED:
+            if state.state in (PlanningState.FAILED, PlanningState.INFEASIBLE):
                 logger.error("[BudgetLoop] 规划失败，退出循环")
                 return state
 
         logger.warning(f"[BudgetLoop] 达到最大重试次数 {self.max_retries}")
-        state.state = PlanningState.COMPLETED
+        state.state = PlanningState.INFEASIBLE
         return state

@@ -17,7 +17,7 @@ from loguru import logger
 
 from agents.base_agent import BaseAgent
 from config.settings import settings
-from models.schemas import TravelPlanState
+from models.schemas import PlanningState, TravelPlanState
 
 
 class ParallelExecutor:
@@ -42,6 +42,7 @@ class ParallelExecutor:
                 err_msg = f"{agent.name} 并行执行失败: {result}"
                 logger.error(err_msg)
                 state.error_messages.append(err_msg)
+                state.state = PlanningState.FAILED
 
         logger.info("[ParallelExecutor] 并行执行完成")
         return state
