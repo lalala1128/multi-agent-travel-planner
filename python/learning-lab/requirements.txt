@@ -1,0 +1,11 @@
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.3
+langgraph==1.2.20
+qdrant-client==1.20.0
+fastembed==0.9.1
+redis==8.1.0
+python-dotenv==1.2.4
+httpx==0.28.1
+pytest==9.2.0
+fakeredis==2.40.0

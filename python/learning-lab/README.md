@@ -1,0 +1,96 @@
+# 基于 LangGraph 与 RAG 的多 Agent 旅游规划系统
+
+一个用于学习和展示 Agent 工程能力的 Python 项目：接收旅行偏好后，编排目的地、航班、酒店、活动和知识检索分支，执行预算回路，并通过 RAG 生成带来源引用的资料摘要。
+
+## 架构
+
+```text
+POST /tasks
+  │
+  ├─ Redis：任务快照、事件序号、SSE 回放记录、检索缓存
+  └─ ThreadPoolExecutor
+       └─ LangGraph
+          preferences → destination
+                          ├─ flight ───┐
+                          ├─ hotel ────┤
+                          ├─ activity ─┼→ budget → adjust (最多 2 次)
+                          └─ knowledge ┘                 │
+                                                          ↓
+                                               answer（受引用约束）
+
+Qdrant：文档切分、向量召回、城市过滤、关键词二阶段重排
+SSE：queued / running / progress / succeeded / failed，支持 Last-Event-ID 补发
+```
+
+## 核心能力
+
+- **LangGraph 工作流**：预算超限只调整活动费用，不修改用户原始需求；最多两轮后返回 `over_budget`。
+- **RAG 检索**：以城市过滤向量候选，再按关键词得分二阶段重排；答案只能引用本次检索出的片段 ID。
+- **增量入库**：`document_id` 由城市和文件名稳定生成，`content_hash` 识别版本；内容未变不重复向量化，更新或删除文件会同步替换 Qdrant 片段。
+- **任务与事件**：Redis Lua 脚本原子更新任务快照、事件序号和 SSE 回放数据；断线后使用 `Last-Event-ID` 增量恢复。
+- **重启恢复**：服务启动时将旧进程遗留的 `queued/running` 任务标记为 `ServiceRestarted`，不自动重跑，以免重复调用模型或产生重复外部副作用。
+- **可靠性**：模型请求有超时和最多三次网络重试；节点完成和重试都会作为 SSE `progress` 事件推送。
+
+## 环境准备
+
+- Python 3.12+
+- Docker Desktop（仅运行 Redis）
+- DeepSeek API Key
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+在 `.env` 中填写 `DEEPSEEK_API_KEY`，不要提交该文件。
+
+## 启动
+
+启动 Redis：
+
+```powershell
+docker compose up -d redis
+docker compose ps
+```
+
+首次使用新版知识库格式时，显式重建本项目本地的 `travel_knowledge` 集合：
+
+```powershell
+python ingest_knowledge.py --rebuild
+```
+
+日常修改 `knowledge/*.md` 后执行增量入库：
+
+```powershell
+python ingest_knowledge.py
+```
+
+启动 API：
+
+```powershell
+python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+访问 `http://127.0.0.1:8001/docs` 使用 Swagger 调试。
+
+## 异步任务接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /tasks` | 创建任务，返回任务 ID、查询地址和 SSE 地址 |
+| `GET /tasks/{task_id}` | 获取任务快照与最终规划结果 |
+| `GET /tasks/{task_id}/events` | 订阅 SSE 事件；支持 `Last-Event-ID` |
+| `POST /recommendations` | 同步执行入口，便于快速调试 |
+
+任务的 `status=succeeded` 代表执行成功；最终规划的 `result.status=over_budget` 代表业务上预算无解，两者并不矛盾。
+
+## 验证
+
+```powershell
+python -m pytest test_answer_agent.py test_answer_retry.py test_document_loader.py test_reranker.py test_ingest_manifest.py test_knowledge_cache.py -q
+python rag_rerank_demo.py
+```
+
+`rag_rerank_demo.py` 会展示向量初排分、关键词分和最终重排分，便于检查资料排序。

@@ -2,6 +2,10 @@
 
 基于 [bcefghj/multi-agent-travel-planner](https://github.com/bcefghj/multi-agent-travel-planner) 的 Python 版本扩展。保留来源说明，将上游源码快照与新增功能分别提交；新增 LangGraph、Qdrant RAG、Redis 任务与缓存、可重连 SSE 和浏览器演示页。来源与修改范围见 [UPSTREAM.md](UPSTREAM.md)。
 
+## 学习复现版
+
+[`python/learning-lab`](python/learning-lab) 是从零手写的轻量实现，保留每个机制的最小可运行代码与测试：LangGraph 并行分支和预算回路、Qdrant 城市过滤与关键词重排、文档版本去重、Redis Lua 事件、SSE 重连、模型超时重试和服务重启恢复。它与根目录的扩展版并存，不替换既有实现。
+
 ## 快速启动
 
 要求 Python 3.12+、uv。请在仓库根目录执行：
