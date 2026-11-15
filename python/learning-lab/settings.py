@@ -30,6 +30,12 @@ class Settings:
     rate_limit_window_seconds: int
     travel_provider: str
     allowed_hosts: list[str]
+    hotelbeds_api_key: str | None
+    hotelbeds_secret: str | None
+    hotelbeds_base_url: str
+    hotelbeds_client_cert: str | None
+    hotelbeds_client_key: str | None
+    hotelbeds_timeout_seconds: float
 
 
 def load_settings() -> Settings:
@@ -63,4 +69,10 @@ def load_settings() -> Settings:
         rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
         travel_provider=os.getenv("TRAVEL_PROVIDER", "demo").strip().lower(),
         allowed_hosts=allowed_hosts,
+        hotelbeds_api_key=os.getenv("HOTELBEDS_API_KEY") or None,
+        hotelbeds_secret=os.getenv("HOTELBEDS_SECRET") or None,
+        hotelbeds_base_url=os.getenv("HOTELBEDS_BASE_URL", "https://api-mtls.test.hotelbeds.com"),
+        hotelbeds_client_cert=os.getenv("HOTELBEDS_CLIENT_CERT") or None,
+        hotelbeds_client_key=os.getenv("HOTELBEDS_CLIENT_KEY") or None,
+        hotelbeds_timeout_seconds=float(os.getenv("HOTELBEDS_TIMEOUT_SECONDS", "15")),
     )

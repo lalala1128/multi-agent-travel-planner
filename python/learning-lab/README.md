@@ -122,6 +122,21 @@ Caddy 会自动申请和续期 TLS 证书，并将 HTTPS 请求转发给 API。�
 
 任务的 `status=succeeded` 代表执行成功；最终规划的 `result.status=over_budget` 代表业务上预算无解，两者并不矛盾。
 
+## Hotelbeds 真实酒店查询
+
+`POST /providers/hotelbeds/hotel-offers` 接入 Hotelbeds Hotel Booking API 的只读 Availability 查询，不调用 `checkrates` 或 `bookings`，不会产生订单。请求必须带入住/离店日期、成人数及 Hotelbeds 酒店代码；返回真实供应商金额与币种，**不会直接加入当前 CNY 演示预算**，避免未接汇率服务时跨币种误算。
+
+Hotelbeds 目前要求酒店 Availability 使用 mTLS。将 API Key、Secret、客户端证书和私钥只配置在本机 `.env`，例如：
+
+```ini
+HOTELBEDS_API_KEY=...
+HOTELBEDS_SECRET=...
+HOTELBEDS_CLIENT_CERT=C:\\secure\\hotelbeds-client.crt
+HOTELBEDS_CLIENT_KEY=C:\\secure\\hotelbeds-client.key
+```
+
+证书目录、`.pem`、`.key` 和 `.crt` 均被忽略，不能提交 Git。测试环境基地址为 `https://api-mtls.test.hotelbeds.com`。完整预订流程还必须先对 `rateType=RECHECK` 的报价调用 CheckRate，再由经审核的支付/预订流程确认；本项目不执行这些有外部副作用的步骤。
+
 ## 验证
 
 ```powershell

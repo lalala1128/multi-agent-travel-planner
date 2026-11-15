@@ -16,9 +16,15 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from metrics import Metrics
 from preference_agent import PreferenceAgent
+from hotelbeds_client import (
+    HotelbedsClient,
+    HotelbedsConfigurationError,
+    HotelbedsResponseError,
+    HotelbedsUpstreamError,
+)
 from qdrant_factory import create_qdrant_client
 from rate_limiter import RateLimitExceeded, RateLimiter
-from schemas import PlanningState, TaskEvent, TaskRecord, TravelRequest
+from schemas import HotelSearchRequest, HotelSearchResponse, PlanningState, TaskEvent, TaskRecord, TravelRequest
 from settings import load_settings
 from task_service import TaskCapacityError, TaskService
 from task_store import TaskStore
@@ -162,6 +168,20 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
         )
 
     protected = [Depends(require_api_key), Depends(enforce_rate_limit)]
+
+    @app.post(
+        "/providers/hotelbeds/hotel-offers",
+        response_model=HotelSearchResponse,
+        dependencies=protected,
+    )
+    async def search_hotelbeds_offers(request: HotelSearchRequest):
+        """查询 Hotelbeds 酒店可用性；只读，不发起核价或预订。"""
+        try:
+            return await asyncio.to_thread(HotelbedsClient().search, request)
+        except HotelbedsConfigurationError:
+            raise HTTPException(503, "Hotelbeds 凭据或 mTLS 证书尚未配置") from None
+        except (HotelbedsUpstreamError, HotelbedsResponseError):
+            raise HTTPException(502, "Hotelbeds 酒店报价暂不可用") from None
 
     @app.post("/preferences", dependencies=protected)
     def collect_preferences(request: TravelRequest):

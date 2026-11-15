@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator, model_validator
+from datetime import date, datetime
 from typing import Literal
 from typing import Any, Literal
 
@@ -31,6 +31,31 @@ class HotelResult(BaseModel):
     provider: str = "demo"
     quote_reference: str
     quoted_at: datetime
+class HotelSearchRequest(BaseModel):
+    check_in: date
+    check_out: date
+    hotel_codes: list[int] = Field(min_length=1, max_length=20)
+    adults: int = Field(default=1, ge=1, le=9)
+    rooms: int = Field(default=1, ge=1, le=9)
+
+    @model_validator(mode="after")
+    def validate_stay(self):
+        if self.check_out <= self.check_in:
+            raise ValueError("离店日期必须晚于入住日期")
+        return self
+
+class HotelOffer(BaseModel):
+    hotel_code: int
+    hotel_name: str
+    total_price: float = Field(ge=0)
+    currency: str
+    rate_type: str | None = None
+    quote_reference: str
+
+class HotelSearchResponse(BaseModel):
+    provider: str
+    quoted_at: datetime
+    offers: list[HotelOffer]
 class BudgetResult(BaseModel):
     total_cost: float = Field(ge=0)
     remaining: float
