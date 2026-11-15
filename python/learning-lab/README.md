@@ -31,7 +31,7 @@ SSE：queued / running / progress / succeeded / failed，支持 Last-Event-ID �
 - **重启恢复**：服务启动时将旧进程遗留的 `queued/running` 任务标记为 `ServiceRestarted`，不自动重跑，以免重复调用模型或产生重复外部副作用。
 - **可靠性**：模型请求有超时和最多三次网络重试；节点完成和重试都会作为 SSE `progress` 事件推送。
 - **报价边界**：航班、酒店、活动经过独立供应商适配层；默认 `demo` 报价会带 `provider/quote_reference/quoted_at` 标识，非 `demo` 供应商未配置时会显式失败，不会伪装成实时价格。
-- **运行可观测性**：`/livez` 用于进程存活检查，`/healthz` 同时检查 Redis 与 Qdrant，`/metrics` 提供 Prometheus 文本指标（受 API Key 保护）。
+- **运行可观测性**：`/livez` 用于进程存活检查，`/healthz` 同时检查 Redis 与 Qdrant，`/metrics` 提供 Prometheus 文本指标（受 API Key 保护）；指标包括路由请求量/耗时与规划任务最终状态/耗时，且不使用任务 ID 作为标签。
 
 ## 环境准备
 

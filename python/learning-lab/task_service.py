@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 from pathlib import Path
 from threading import BoundedSemaphore
+import time
 import traceback
 
 from schemas import TaskRecord, TravelRequest
@@ -53,11 +54,12 @@ def locate_failure(error: Exception, default_stage: str):
 
 
 class TaskService:
-    def __init__(self, store: TaskStore, planner=None, max_pending: int = 8):
+    def __init__(self, store: TaskStore, planner=None, max_pending: int = 8, metrics=None):
         if max_pending < 1:
             raise ValueError("任务容量必须大于零")
         self.store = store
         self.planner = planner
+        self.metrics = metrics
         # 同时只运行一个规划任务，避免打开同一个本地 Qdrant 目录。
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="travel-task")
         self.slots = BoundedSemaphore(max_pending)
@@ -97,6 +99,7 @@ class TaskService:
         return record.id, future
 
     def _execute(self, record: TaskRecord):
+        started = time.perf_counter()
         stage = "task_storage"
         try:
             record.status = "running"
@@ -156,6 +159,12 @@ class TaskService:
                     "plan_status": result.status,
                 },
             )
+            if self.metrics is not None:
+                self.metrics.observe_task(
+                    outcome="succeeded",
+                    final_stage=result.status,
+                    duration_seconds=time.perf_counter() - started,
+                )
             return result
         except Exception as error:
             record.status = "failed"
@@ -179,6 +188,12 @@ class TaskService:
                 "任务 %s 执行失败：%s，阶段=%s，位置=%s",
                 record.id, type(error).__name__, record.error_stage, record.error_location,
             )
+            if self.metrics is not None:
+                self.metrics.observe_task(
+                    outcome="failed",
+                    final_stage=record.error_stage or stage,
+                    duration_seconds=time.perf_counter() - started,
+                )
             raise
 
     def close(self):

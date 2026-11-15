@@ -33,18 +33,20 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
 
     @asynccontextmanager
     async def lifespan(app):
+        metrics = Metrics()
         service = TaskService(
             store=store if store is not None else TaskStore(),
             planner=planner,
             max_pending=max_pending,
+            metrics=metrics,
         )
         app.state.task_service = service
+        app.state.metrics = metrics
         app.state.rate_limiter = RateLimiter(
             client=service.store.client,
             max_requests=settings.rate_limit_requests,
             window_seconds=settings.rate_limit_window_seconds,
         )
-        app.state.metrics = Metrics()
         try:
             yield
         finally:
