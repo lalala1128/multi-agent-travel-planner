@@ -2,6 +2,9 @@
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -30,6 +33,9 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    # 不能依赖某个 Agent 恰好先导入；所有配置读取都应自行加载项目 .env。
+    # 默认不覆盖外部环境变量，便于容器和 Secret Manager 注入配置。
+    load_dotenv(Path(__file__).resolve().parent / ".env")
     origins = [
         origin.strip()
         for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",")
