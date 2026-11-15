@@ -20,11 +20,17 @@ class FlightResult(BaseModel):
     departure_city: str
     arrival_city: str
     round_trip_cost: float = Field(gt=0)
+    provider: str = "demo"
+    quote_reference: str
+    quoted_at: datetime
 class HotelResult(BaseModel):
     city: str
     price_per_night: float = Field(gt=0)
     nights: int = Field(ge=0)
     total_cost: float = Field(ge=0)
+    provider: str = "demo"
+    quote_reference: str
+    quoted_at: datetime
 class BudgetResult(BaseModel):
     total_cost: float = Field(ge=0)
     remaining: float
@@ -34,6 +40,9 @@ class ActivityResult(BaseModel):
     plan_type: str = "standard"
     daily_cost: float = Field(ge=0)
     total_cost: float = Field(ge=0)
+    provider: str = "demo"
+    quote_reference: str
+    quoted_at: datetime
 class KnowledgeChunk(BaseModel):
     id: str
     city: str

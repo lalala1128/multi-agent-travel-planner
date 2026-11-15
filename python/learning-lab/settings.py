@@ -24,6 +24,8 @@ class Settings:
     embedding_local_files_only: bool
     rate_limit_requests: int
     rate_limit_window_seconds: int
+    travel_provider: str
+    allowed_hosts: list[str]
 
 
 def load_settings() -> Settings:
@@ -31,6 +33,11 @@ def load_settings() -> Settings:
         origin.strip()
         for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",")
         if origin.strip()
+    ]
+    allowed_hosts = [
+        host.strip()
+        for host in os.getenv("ALLOWED_HOSTS", "").split(",")
+        if host.strip()
     ]
     return Settings(
         redis_host=os.getenv("REDIS_HOST", "127.0.0.1"),
@@ -46,4 +53,6 @@ def load_settings() -> Settings:
         embedding_local_files_only=env_bool("EMBEDDING_LOCAL_FILES_ONLY", True),
         rate_limit_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "60")),
         rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
+        travel_provider=os.getenv("TRAVEL_PROVIDER", "demo").strip().lower(),
+        allowed_hosts=allowed_hosts,
     )

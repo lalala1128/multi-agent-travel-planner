@@ -3,23 +3,27 @@ from schemas import (
     DestinationRecommendation,
     HotelResult,
 )
+from quote_providers import create_travel_provider
 
 
 class HotelAgent:
+    def __init__(self, provider=None):
+        self.provider = provider or create_travel_provider()
+
     def run(
         self,
         preferences: TravelRequest,
         destination: DestinationRecommendation,
     ) -> HotelResult:
-        # 用于学习的单间每晚模拟报价
-        price_per_night = 300
-
         nights = preferences.days - 1
-        total_cost = price_per_night * nights
+        quote = self.provider.hotel(destination.city, nights)
 
         return HotelResult(
             city=destination.city,
-            price_per_night=price_per_night,
+            price_per_night=quote.amount,
             nights=nights,
-            total_cost=total_cost,
+            total_cost=quote.amount * nights,
+            provider=quote.provider,
+            quote_reference=quote.quote_reference,
+            quoted_at=quote.quoted_at,
         )

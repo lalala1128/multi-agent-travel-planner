@@ -3,25 +3,25 @@ from schemas import (
     DestinationRecommendation,
     FlightResult,
 )
+from quote_providers import create_travel_provider
 
 
 class FlightAgent:
+    def __init__(self, provider=None):
+        self.provider = provider or create_travel_provider()
+
     def run(
         self,
         preferences: TravelRequest,
         destination: DestinationRecommendation,
     ) -> FlightResult:
-        # 用于学习的单人往返模拟报价
-        mock_prices = {
-            "清迈": 1600,
-            "首尔": 1800,
-            "东京": 2500,
-        }
-
-        price = mock_prices[destination.city]
+        quote = self.provider.flight(preferences.departure_city, destination.city)
 
         return FlightResult(
             departure_city=preferences.departure_city,
             arrival_city=destination.city,
-            round_trip_cost=price,
+            round_trip_cost=quote.amount,
+            provider=quote.provider,
+            quote_reference=quote.quote_reference,
+            quoted_at=quote.quoted_at,
         )

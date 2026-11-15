@@ -30,6 +30,8 @@ SSE：queued / running / progress / succeeded / failed，支持 Last-Event-ID �
 - **任务与事件**：Redis Lua 脚本原子更新任务快照、事件序号和 SSE 回放数据；断线后使用 `Last-Event-ID` 增量恢复。
 - **重启恢复**：服务启动时将旧进程遗留的 `queued/running` 任务标记为 `ServiceRestarted`，不自动重跑，以免重复调用模型或产生重复外部副作用。
 - **可靠性**：模型请求有超时和最多三次网络重试；节点完成和重试都会作为 SSE `progress` 事件推送。
+- **报价边界**：航班、酒店、活动经过独立供应商适配层；默认 `demo` 报价会带 `provider/quote_reference/quoted_at` 标识，非 `demo` 供应商未配置时会显式失败，不会伪装成实时价格。
+- **运行可观测性**：`/livez` 用于进程存活检查，`/healthz` 同时检查 Redis 与 Qdrant，`/metrics` 提供 Prometheus 文本指标（受 API Key 保护）。
 
 ## 环境准备
 
@@ -99,6 +101,16 @@ X-API-Key: <你的 API_KEY>
 
 `RATE_LIMIT_REQUESTS` 与 `RATE_LIMIT_WINDOW_SECONDS` 控制固定窗口限流；设为 `0` 可临时关闭限流（只建议本地调试）。访问日志只记录方法、路径、状态码和耗时，不记录请求体或认证信息。
 
+### HTTPS 与域名
+
+默认 Compose 仅把 API 绑定在本机 `127.0.0.1:8001`。有可公开访问的域名、DNS A/AAAA 记录和开放的 80/443 端口时，填写 `.env` 的 `DOMAIN`，再启用 Caddy 配置文件：
+
+```powershell
+docker compose --profile edge up -d
+```
+
+Caddy 会自动申请和续期 TLS 证书，并将 HTTPS 请求转发给 API。公网环境还应将 `ALLOWED_HOSTS` 设为真实域名，将 `CORS_ALLOW_ORIGINS` 设为实际前端来源。`.env` 只适合本地或单机部署；云环境应由平台的 Secret Manager 在运行时注入同名环境变量，绝不能写入镜像或提交 Git。
+
 ## 异步任务接口
 
 | 接口 | 说明 |
@@ -122,3 +134,5 @@ python rag_rerank_demo.py
 ## 边界
 
 航班、酒店与活动工具目前使用可预测的演示数据，用于验证编排和预算回路；接入真实供应商时应通过独立适配器注入凭据、超时、限流和报价校验，不能将演示报价当作实时数据。
+
+要接入真实供应商，还需要扩展请求中的出行日期、乘客数、舱等/房型等信息，并按供应商合同实现 `quote_providers.py` 中的适配器。当前将 `TRAVEL_PROVIDER` 设置为非 `demo` 会失败关闭，防止误导用户。

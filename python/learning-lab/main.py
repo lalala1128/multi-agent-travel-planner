@@ -10,9 +10,11 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from redis.exceptions import RedisError
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from metrics import Metrics
 from preference_agent import PreferenceAgent
 from qdrant_factory import create_qdrant_client
 from rate_limiter import RateLimitExceeded, RateLimiter
@@ -42,6 +44,7 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
             max_requests=settings.rate_limit_requests,
             window_seconds=settings.rate_limit_window_seconds,
         )
+        app.state.metrics = Metrics()
         try:
             yield
         finally:
@@ -56,18 +59,29 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
             allow_methods=["GET", "POST"],
             allow_headers=["Content-Type", "Last-Event-ID", "X-API-Key"],
         )
+    if settings.allowed_hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     preference_agent = PreferenceAgent()
 
     @app.middleware("http")
     async def access_log(request: Request, call_next):
         started = time.perf_counter()
         response = await call_next(request)
+        duration_seconds = time.perf_counter() - started
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path)
+        app.state.metrics.observe_request(
+            request.method,
+            path,
+            response.status_code,
+            duration_seconds,
+        )
         logger.info(
             "access method=%s path=%s status=%s duration_ms=%.1f",
             request.method,
-            request.url.path,
+            path,
             response.status_code,
-            (time.perf_counter() - started) * 1000,
+            duration_seconds * 1000,
         )
         return response
 
@@ -132,6 +146,18 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
     @app.get("/health")
     def health():
         return healthz()
+
+    @app.get("/livez")
+    def livez():
+        """仅验证 API 进程存活；部署编排器不应以外部依赖状态重启它。"""
+        return {"status": "ok"}
+
+    @app.get("/metrics", dependencies=[Depends(require_api_key)])
+    def metrics():
+        return PlainTextResponse(
+            app.state.metrics.render_prometheus(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     protected = [Depends(require_api_key), Depends(enforce_rate_limit)]
 
