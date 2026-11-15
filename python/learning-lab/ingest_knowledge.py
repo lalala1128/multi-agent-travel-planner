@@ -10,6 +10,8 @@ from fastembed import TextEmbedding
 from qdrant_client import QdrantClient, models
 
 from document_loader import load_documents
+from qdrant_factory import create_qdrant_client
+from settings import load_settings
 
 
 COLLECTION_NAME = "travel_knowledge"
@@ -110,7 +112,8 @@ def ingest(rebuild: bool = False) -> dict:
     previous_manifest = load_manifest(manifest_path)
     previous_documents = previous_manifest["documents"]
 
-    client = QdrantClient(path=str(base_dir / "data" / "qdrant_demo"))
+    settings = load_settings()
+    client = create_qdrant_client(base_dir)
     try:
         collection_exists = client.collection_exists(COLLECTION_NAME)
         if rebuild and collection_exists:
@@ -153,7 +156,7 @@ def ingest(rebuild: bool = False) -> dict:
             model = TextEmbedding(
                 model_name="BAAI/bge-small-zh-v1.5",
                 cache_dir=str(base_dir / ".model_cache"),
-                local_files_only=True,
+                local_files_only=settings.embedding_local_files_only,
             )
             vectors = list(model.embed([chunk["text"] for chunk in changed_chunks]))
             points = make_points(changed_chunks, vectors)

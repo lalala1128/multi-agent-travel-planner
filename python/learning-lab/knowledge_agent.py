@@ -2,15 +2,18 @@ import json
 from pathlib import Path
 
 from fastembed import TextEmbedding
-from qdrant_client import QdrantClient, models
+from qdrant_client import models
 from knowledge_cache import KnowledgeCache
+from qdrant_factory import create_qdrant_client
 from reranker import rerank
+from settings import load_settings
 
 
 class KnowledgeAgent:
     def __init__(self, cache=None):
         base_dir = Path(__file__).resolve().parent
 
+        self.base_dir = base_dir
         self.db_path = base_dir / "data" / "qdrant_demo"
         self.collection_name = "travel_knowledge"
         self.embedding_model = "BAAI/bge-small-zh-v1.5"
@@ -21,6 +24,7 @@ class KnowledgeAgent:
         self.cache = cache if cache is not None else KnowledgeCache()
 
         self.model_cache_dir = base_dir / ".model_cache"
+        self.settings = load_settings()
         # 命中 Redis 时不必加载模型；模型文件已在前面的实验中下载。
         self.model = None
 
@@ -66,7 +70,7 @@ class KnowledgeAgent:
             self.model = TextEmbedding(
                 model_name=self.embedding_model,
                 cache_dir=str(self.model_cache_dir),
-                local_files_only=True,
+                local_files_only=self.settings.embedding_local_files_only,
             )
 
         # 将问题转换为向量
@@ -77,7 +81,7 @@ class KnowledgeAgent:
 
         query_vector = list(self.model.embed([query]))[0]
 
-        client = QdrantClient(path=str(self.db_path))
+        client = create_qdrant_client(self.base_dir)
 
         try:
             if not client.collection_exists(self.collection_name):

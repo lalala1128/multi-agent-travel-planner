@@ -34,7 +34,7 @@ SSE：queued / running / progress / succeeded / failed，支持 Last-Event-ID �
 ## 环境准备
 
 - Python 3.12+
-- Docker Desktop（仅运行 Redis）
+- Docker Desktop（本地 Redis、Qdrant，或直接使用完整 Compose 部署）
 - DeepSeek API Key
 
 ```powershell
@@ -75,6 +75,30 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 访问 `http://127.0.0.1:8001/docs` 使用 Swagger 调试。
 
+## Docker 部署
+
+Compose 会启动 API、Redis 和 Qdrant。Redis、Qdrant 仅在 Docker 内部网络暴露，API 只映射到本机 `127.0.0.1:8001`。
+
+```powershell
+Copy-Item .env.example .env
+# 在 .env 中设置 DEEPSEEK_API_KEY；部署环境同时设置 API_KEY
+docker compose up -d --build
+docker compose run --rm api python ingest_knowledge.py --rebuild
+curl.exe http://127.0.0.1:8001/healthz
+```
+
+首次容器入库会下载 Embedding 模型；模型缓存、任务清单、Redis 和 Qdrant 数据均使用 Docker Volume 持久化。`--rebuild` 只清空本项目的 `travel_knowledge` 集合。
+
+设置 `API_KEY` 后，除 `/health` 与 `/healthz` 外的接口均需要携带：
+
+```text
+X-API-Key: <你的 API_KEY>
+```
+
+可通过 `REDIS_HOST`、`REDIS_PORT`、`QDRANT_URL`、`QDRANT_API_KEY` 切换到托管 Redis 或 Qdrant Cloud；本地模式下不设置 `QDRANT_URL` 即继续使用磁盘路径模式。
+
+`RATE_LIMIT_REQUESTS` 与 `RATE_LIMIT_WINDOW_SECONDS` 控制固定窗口限流；设为 `0` 可临时关闭限流（只建议本地调试）。访问日志只记录方法、路径、状态码和耗时，不记录请求体或认证信息。
+
 ## 异步任务接口
 
 | 接口 | 说明 |
@@ -94,3 +118,7 @@ python rag_rerank_demo.py
 ```
 
 `rag_rerank_demo.py` 会展示向量初排分、关键词分和最终重排分，便于检查资料排序。
+
+## 边界
+
+航班、酒店与活动工具目前使用可预测的演示数据，用于验证编排和预算回路；接入真实供应商时应通过独立适配器注入凭据、超时、限流和报价校验，不能将演示报价当作实时数据。

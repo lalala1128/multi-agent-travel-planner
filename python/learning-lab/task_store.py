@@ -7,6 +7,7 @@ from uuid import uuid4
 from redis import Redis
 
 from schemas import TaskEvent, TaskRecord, TravelRequest
+from settings import load_settings
 
 
 CREATE_TASK_LUA = """
@@ -61,14 +62,16 @@ return cjson.encode(event)
 
 
 class TaskStore:
-    def __init__(self, client=None, ttl: int = 86400):
+    def __init__(self, client=None, ttl: int | None = None):
+        settings = load_settings()
+        ttl = settings.task_ttl_seconds if ttl is None else ttl
         if ttl <= 0:
             raise ValueError("任务有效期必须大于零")
 
         self.ttl = ttl
         self.client = client if client is not None else Redis(
-            host="127.0.0.1",
-            port=6380,
+            host=settings.redis_host,
+            port=settings.redis_port,
             db=0,
             decode_responses=True,
             socket_connect_timeout=2,

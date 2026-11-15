@@ -52,6 +52,21 @@ def test_empty_results_are_a_cache_hit(context):
         cache.close()
 
 
+def test_cache_preserves_rerank_observability_fields(context, results):
+    enriched = [{
+        **results[0],
+        "vector_score": 0.7,
+        "keyword_score": 0.5,
+        "rerank_score": 0.66,
+    }]
+    cache = KnowledgeCache(client=fakeredis.FakeRedis(decode_responses=True))
+    try:
+        cache.set(context, enriched)
+        assert cache.get(context) == enriched
+    finally:
+        cache.close()
+
+
 @pytest.mark.parametrize("field,value", [
     ("city", "东京"), ("question", "文化建议"), ("model", "another-model"),
     ("collection", "another-collection"), ("top_k", 1),

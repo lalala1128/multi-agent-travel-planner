@@ -1,18 +1,51 @@
 name: travel-agent-lab
 
 services:
+  api:
+    build:
+      context: .
+    # 正式启动默认读取 .env；CI 或配置校验可用 ENV_FILE=.env.example 覆盖。
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_LOCAL_FILES_ONLY: "false"
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - app_data:/app/data
+      - model_cache:/app/.model_cache
+      - ./knowledge:/app/knowledge:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
   redis:
     image: redis:7.4-alpine
-    ports:
-      - "127.0.0.1:6380:6379"
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.1
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose:
+      - "6333"
+    restart: unless-stopped
 
 volumes:
+  app_data:
+  model_cache:
   redis_data:
+  qdrant_data:

@@ -8,20 +8,23 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from schemas import KnowledgeChunk
+from settings import load_settings
 
 
 logger = logging.getLogger(__name__)
 
 
 class KnowledgeCache:
-    def __init__(self, client=None, ttl: int = 600):
+    def __init__(self, client=None, ttl: int | None = None):
+        settings = load_settings()
+        ttl = settings.cache_ttl_seconds if ttl is None else ttl
         if ttl <= 0:
             raise ValueError("缓存有效期必须大于零")
 
         self.ttl = ttl
         self.client = client if client is not None else Redis(
-            host="127.0.0.1",
-            port=6380,
+            host=settings.redis_host,
+            port=settings.redis_port,
             db=0,
             decode_responses=True,
             socket_connect_timeout=2,
@@ -58,7 +61,8 @@ class KnowledgeCache:
             results = []
             for item in data:
                 chunk = KnowledgeChunk.model_validate(item)
-                results.append(chunk.model_dump())
+                # 保留 vector_score / keyword_score 等可观测字段。
+                results.append({**item, **chunk.model_dump()})
             return results
         except (ValueError, TypeError):
             logger.warning("知识缓存格式无效，重新执行检索")
