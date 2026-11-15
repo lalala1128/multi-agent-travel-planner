@@ -22,6 +22,7 @@ class Settings:
     api_key: str | None
     cors_origins: list[str]
     embedding_local_files_only: bool
+    embedding_cache_dir: str | None
     rate_limit_requests: int
     rate_limit_window_seconds: int
     travel_provider: str
@@ -51,6 +52,7 @@ def load_settings() -> Settings:
         api_key=os.getenv("API_KEY") or None,
         cors_origins=origins,
         embedding_local_files_only=env_bool("EMBEDDING_LOCAL_FILES_ONLY", True),
+        embedding_cache_dir=os.getenv("EMBEDDING_CACHE_DIR") or None,
         rate_limit_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "60")),
         rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
         travel_provider=os.getenv("TRAVEL_PROVIDER", "demo").strip().lower(),

@@ -155,7 +155,11 @@ def ingest(rebuild: bool = False) -> dict:
         if changed_chunks:
             model = TextEmbedding(
                 model_name="BAAI/bge-small-zh-v1.5",
-                cache_dir=str(base_dir / ".model_cache"),
+                cache_dir=str(
+                    Path(settings.embedding_cache_dir)
+                    if settings.embedding_cache_dir
+                    else base_dir / ".model_cache"
+                ),
                 local_files_only=settings.embedding_local_files_only,
             )
             vectors = list(model.embed([chunk["text"] for chunk in changed_chunks]))

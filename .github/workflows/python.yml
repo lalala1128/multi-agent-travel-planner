@@ -26,5 +26,5 @@ jobs:
           python -m pytest
           test_answer_agent.py test_answer_retry.py test_document_loader.py
           test_reranker.py test_ingest_manifest.py test_knowledge_cache.py
-          test_rate_limiter.py test_quote_providers.py test_metrics.py
+          test_rate_limiter.py test_quote_providers.py test_metrics.py test_embedding_settings.py
           test_tasks.py -q

@@ -23,8 +23,12 @@ class KnowledgeAgent:
         self.keyword_weight = 0.2
         self.cache = cache if cache is not None else KnowledgeCache()
 
-        self.model_cache_dir = base_dir / ".model_cache"
         self.settings = load_settings()
+        self.model_cache_dir = (
+            Path(self.settings.embedding_cache_dir)
+            if self.settings.embedding_cache_dir
+            else base_dir / ".model_cache"
+        )
         # 命中 Redis 时不必加载模型；模型文件已在前面的实验中下载。
         self.model = None
 
