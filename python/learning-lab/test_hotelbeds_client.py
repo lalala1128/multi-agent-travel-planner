@@ -16,6 +16,7 @@ def settings(**overrides):
         "hotelbeds_base_url": "https://example.test",
         "hotelbeds_client_cert": None,
         "hotelbeds_client_key": None,
+        "hotelbeds_client_key_password": None,
         "hotelbeds_timeout_seconds": 15,
     }
     values.update(overrides)

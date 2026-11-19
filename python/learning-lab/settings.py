@@ -35,6 +35,7 @@ class Settings:
     hotelbeds_base_url: str
     hotelbeds_client_cert: str | None
     hotelbeds_client_key: str | None
+    hotelbeds_client_key_password: str | None
     hotelbeds_timeout_seconds: float
 
 
@@ -74,5 +75,6 @@ def load_settings() -> Settings:
         hotelbeds_base_url=os.getenv("HOTELBEDS_BASE_URL", "https://api-mtls.test.hotelbeds.com"),
         hotelbeds_client_cert=os.getenv("HOTELBEDS_CLIENT_CERT") or None,
         hotelbeds_client_key=os.getenv("HOTELBEDS_CLIENT_KEY") or None,
+        hotelbeds_client_key_password=os.getenv("HOTELBEDS_CLIENT_KEY_PASSWORD") or None,
         hotelbeds_timeout_seconds=float(os.getenv("HOTELBEDS_TIMEOUT_SECONDS", "15")),
     )

@@ -47,7 +47,9 @@ class HotelbedsClient:
         if missing:
             raise HotelbedsConfigurationError("Hotelbeds 凭据未配置")
         if self.transport is None and (
-            not self.settings.hotelbeds_client_cert or not self.settings.hotelbeds_client_key
+            not self.settings.hotelbeds_client_cert
+            or not self.settings.hotelbeds_client_key
+            or not self.settings.hotelbeds_client_key_password
         ):
             raise HotelbedsConfigurationError("Hotelbeds mTLS 客户端证书未配置")
 
@@ -60,6 +62,7 @@ class HotelbedsClient:
         context.load_cert_chain(
             certfile=self.settings.hotelbeds_client_cert,
             keyfile=self.settings.hotelbeds_client_key,
+            password=self.settings.hotelbeds_client_key_password,
         )
         return context
 

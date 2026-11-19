@@ -133,11 +133,12 @@ HOTELBEDS_API_KEY=...
 HOTELBEDS_SECRET=...
 HOTELBEDS_CLIENT_CERT=C:\\secure\\hotelbeds-client.crt
 HOTELBEDS_CLIENT_KEY=C:\\secure\\hotelbeds-client.key
+HOTELBEDS_CLIENT_KEY_PASSWORD=...
 ```
 
 证书目录、`.pem`、`.key` 和 `.crt` 均被忽略，不能提交 Git。测试环境基地址为 `https://api-mtls.test.hotelbeds.com`。完整预订流程还必须先对 `rateType=RECHECK` 的报价调用 CheckRate，再由经审核的支付/预订流程确认；本项目不执行这些有外部副作用的步骤。
 
-如果系统 OpenSSL 配置不可用，可用安装在本机 Anaconda 的 Python 生成 CSR：`D:\\anaconda\\python.exe generate_hotelbeds_csr.py`。只将生成的 `certs/hotelbeds-client.csr` 上传给 Hotelbeds，私钥始终留在 `certs/hotelbeds-client.key`。
+Hotelbeds 创建证书时，CSR 还必须包含由后台 **Create Secret** 按钮生成的 `challengePassword`。如果系统 OpenSSL 配置不可用，可用安装在本机 Anaconda 的 Python 生成 CSR：`D:\\anaconda\\python.exe generate_hotelbeds_csr.py --email <门户注册邮箱>`。脚本会隐藏输入挑战密码与私钥密码，只将生成的 `certs/hotelbeds-client.csr` 上传给 Hotelbeds；私钥始终留在 `certs/hotelbeds-client.key`。
 
 ## 验证
 
