@@ -8,7 +8,10 @@ class DestinationAgent:
     ) -> DestinationRecommendation:
         daily_budget = preferences.budget / preferences.days
 
-        if daily_budget < 500:
+        if preferences.destination_city:
+            city = preferences.destination_city
+            reason = "用户指定目的地"
+        elif daily_budget < 500:
             city = "清迈"
             reason = "命中低预算演示规则"
         elif daily_budget < 1000:

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的旅行预算</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f1;color:#173631;font:16px/1.55 Inter,"Microsoft YaHei",sans-serif}
+main{max-width:48rem;margin:3vw auto;background:white;border-top:5px solid #23645b;padding:clamp(1.2rem,4vw,3rem)}
+h1{font-size:2.1rem;margin:0}fieldset{border:0;border-top:1px solid #cad8d4;padding:1rem 0;margin:1.3rem 0}
+legend{font-weight:700;padding-right:.8rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:1rem}
+label{display:block}input,select,button{font:inherit}input:not([type=checkbox]),select{display:block;width:100%;margin-top:.3rem;border:1px solid #92a8a2;border-radius:4px;padding:.55rem}
+button{background:#195b50;color:white;padding:.65rem 1.4rem;border:0;border-radius:4px;margin-top:1rem;cursor:pointer}
+button:disabled{opacity:.55}small{color:#42645b}iframe{width:100%;height:80vh;border:0}a{color:#195b50}
+[hidden]{display:none!important}
+</style></head><body><main><h1>我的旅行预算</h1><p>按一位旅客核算，金额均为人民币。填入你查到的含税总价。</p>
+<form id="trip"><fieldset><legend>行程</legend><div class="grid">
+<label>出发城市<input name="departure_city" required maxlength="80" autocomplete="off"></label>
+<label>目的地<input name="destination_city" maxlength="80" placeholder="例如：厦门" required></label>
+<label>入住日期<input type="date" name="hotel_check_in" required></label>
+<label>行程天数<input type="number" min="2" max="30" value="5" name="days" required></label></div></fieldset>
+<fieldset><legend>费用</legend><div class="grid">
+<label>旅行总预算（元）<input type="number" min=".01" step=".01" name="budget" required></label>
+<label>往返机票总价（元）<input type="number" min=".01" step=".01" name="flight_total_cny" required></label>
+<label>整段住宿总价（元）<input type="number" min="0" step=".01" name="hotel_total_cny" required></label>
+<label>每天餐饮、交通和活动预留（元）<input type="number" min="0" step=".01" name="daily_spending_cny" required></label>
+</div><p><small>系统按行程天数计算每日预留，预算超支时保留你填写的金额。</small></p></fieldset>
+<label><input type="checkbox" name="include_knowledge"> 附上本地旅行资料摘要</label>
+<label {{key_visibility}}>服务访问密钥<input type="password" name="access_key" autocomplete="off"></label>
+<button type="submit">生成预算行程单</button><p id="message" role="status"></p></form>
+<iframe id="report" title="旅行预算行程单" sandbox hidden></iframe></main>
+<script>
+const form=document.querySelector('#trip'), message=document.querySelector('#message'), frame=document.querySelector('#report');
+const today=new Date(); today.setMinutes(today.getMinutes()-today.getTimezoneOffset());
+form.elements.hotel_check_in.min=today.toISOString().slice(0,10);
+form.addEventListener('submit', async event=>{
+  event.preventDefault();
+  const button=form.querySelector('button'); button.disabled=true; frame.hidden=true;
+  const data=new FormData(form), key=data.get('access_key');
+  const payload=Object.fromEntries(data);
+  delete payload.access_key;
+  payload.include_knowledge=form.elements.include_knowledge.checked;
+  const headers={'Content-Type':'application/json'};
+  if(key) headers['X-API-Key']=key;
+  try{
+    message.textContent='正在提交行程…';
+    const result=await fetch('/tasks',{method:'POST',headers,body:JSON.stringify(payload)});
+    if(!result.ok){
+      const detail=(await result.json()).detail;
+      throw Error(typeof detail==='string'?detail:'请核对表单内容（HTTP '+result.status+'）');
+    }
+    const task=await result.json();
+    if(!key){location.assign(task.report_url);return;}
+    message.textContent='正在规划…';
+    for(;;){
+      const status=await fetch(task.status_url,{headers});
+      if(!status.ok)throw Error('读取任务失败（HTTP '+status.status+'）');
+      if(['failed','succeeded'].includes((await status.json()).status))break;
+      await new Promise(resolve=>setTimeout(resolve,3000));
+    }
+    const report=await fetch(task.report_url,{headers});
+    if(!report.ok)throw Error('读取行程单失败（HTTP '+report.status+'）');
+    frame.srcdoc=await report.text();frame.hidden=false;message.textContent='行程结果已更新。';
+  }catch(error){message.textContent=error.message;}finally{button.disabled=false;}
+});
+</script></body></html>

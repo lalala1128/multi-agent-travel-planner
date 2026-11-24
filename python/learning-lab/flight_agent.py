@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from schemas import (
     TravelRequest,
     DestinationRecommendation,
@@ -15,6 +16,10 @@ class FlightAgent:
         preferences: TravelRequest,
         destination: DestinationRecommendation,
     ) -> FlightResult:
+        if preferences.flight_total_cny is not None:
+            return FlightResult(departure_city=preferences.departure_city, arrival_city=destination.city,
+                                round_trip_cost=preferences.flight_total_cny, provider="user_input",
+                                quote_reference="user-flight", quoted_at=datetime.now(UTC))
         quote = self.provider.flight(preferences.departure_city, destination.city)
 
         return FlightResult(

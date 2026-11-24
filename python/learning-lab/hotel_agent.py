@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from exchange_rates import fetch_daily_rates
 from hotelbeds_client import HotelbedsClient
@@ -21,6 +21,10 @@ class HotelAgent:
         destination: DestinationRecommendation,
     ) -> HotelResult | None:
         nights = preferences.days - 1
+        if preferences.hotel_total_cny is not None:
+            return HotelResult(city=destination.city, nights=nights, total_cost=preferences.hotel_total_cny,
+                               price_per_night=round(preferences.hotel_total_cny / nights, 2),
+                               provider="user_input", quote_reference="user-hotel", quoted_at=datetime.now(UTC))
         if preferences.hotel_check_in is not None:
             start = preferences.hotel_check_in
             response = HotelbedsClient().search_city(destination.city, start, start + timedelta(days=nights))

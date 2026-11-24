@@ -26,21 +26,23 @@ def plan_sections(plan):
             yield (f"<h2>预计总费用 ¥{budget.total_cost:,.2f}</h2>"
                    f"<p>预算 ¥{plan.preferences.budget:,.2f} · {label} ¥{abs(budget.remaining):,.2f}</p>")
         if budget.rounds:
-            yield table(["方案", "机票（元）", "住宿（元）", "活动（元）", "合计（元）"], [
-                ({"standard": "标准活动", "economy": "经济活动", "free": "免费活动"}.get(r.activity_plan, r.activity_plan),
+            yield table(["方案", "机票（元）", "住宿（元）", "当地开销（元）", "合计（元）"], [
+                ({"standard": "标准活动", "economy": "经济活动", "free": "免费活动", "fixed": "固定每日开销"}.get(r.activity_plan, r.activity_plan),
                  f"{r.flight_cny:,.2f}", f"{r.hotel_cny:,.2f}", f"{r.activity_cny:,.2f}", f"{r.total_cny:,.2f}")
                 for r in budget.rounds
             ])
         if budget.hotel_budget_limit_cny is not None:
             yield f"<p>保留最终航班和活动时，整段住宿最多可花 ¥{budget.hotel_budget_limit_cny:,.2f}。</p>"
     if plan.flight and plan.activity:
-        yield (f"<p>航班来源：{escape(plan.flight.provider)} · 活动来源：{escape(plan.activity.provider)}"
-               "（demo 表示演示报价）</p>")
+        labels = {"demo": "演示估算", "user_input": "本人填写"}
+        yield (f"<p>机票来源：{escape(labels.get(plan.flight.provider, plan.flight.provider))} · "
+               f"当地开销来源：{escape(labels.get(plan.activity.provider, plan.activity.provider))}</p>")
     hotel = plan.hotel
     if hotel:
         yield f"<h2>{escape(hotel.hotel_name or '住宿方案')}</h2>"
         yield (f"<p>{hotel.nights} 晚合计 {escape(hotel.currency)} {hotel.total_cost:,.2f}"
-               f" · {escape(hotel.provider)} · 报价时间 {escape(hotel.quoted_at.isoformat(timespec='minutes'))}</p>")
+               f" · {escape({'user_input':'本人填写','demo':'演示估算'}.get(hotel.provider, hotel.provider))}"
+               f" · 记录时间 {escape(hotel.quoted_at.isoformat(timespec='minutes'))}</p>")
         if plan.preferences.hotel_check_in:
             start = plan.preferences.hotel_check_in
             yield f"<p>入住 {start} · 退房 {start + timedelta(days=hotel.nights)}</p>"
@@ -88,4 +90,4 @@ table{{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}}td
 th{{background:#edf4f0}}summary{{cursor:pointer}}a{{color:#176258}}footer{{margin-top:2rem}}
 @media print{{main{{margin:0;max-width:none;padding:0;border:0}}footer{{display:none}}tr{{break-inside:avoid}}}}
 </style></head><body><main><h1>{escape(title)}</h1>{body}
-<footer><a href="/tasks/{escape(record.id, quote=True)}">查看原始任务数据</a></footer></main></body></html>"""
+<footer><a href="/">新建旅行预算</a> · <a href="/tasks/{escape(record.id, quote=True)}">查看原始任务数据</a></footer></main></body></html>"""

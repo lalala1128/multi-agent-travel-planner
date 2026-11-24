@@ -62,7 +62,7 @@ def route_after_budget(state: PlanningState):
     if state.budget_result.within_budget:
         return "completed"
 
-    if state.adjustment_count < 2:
+    if state.preferences.daily_spending_cny is None and state.adjustment_count < 2:
         return "adjust"
 
     return "over_budget"
@@ -92,6 +92,8 @@ def adjust_activity(state: PlanningState):
         "adjustment_count": state.adjustment_count + 1,
     }
 def retrieve_knowledge(state: PlanningState):
+    if not state.preferences.include_knowledge:
+        return {"knowledge": []}
     matches = knowledge_agent.run(
         city=state.destination.city,
         question=state.preferences.knowledge_question,
@@ -105,6 +107,8 @@ def retrieve_knowledge(state: PlanningState):
 
     return {"knowledge": chunks}
 def generate_answer(state: PlanningState, on_retry=None):
+    if not state.preferences.include_knowledge:
+        return {"knowledge_answer": None}
     result = answer_agent.run(
         question=state.preferences.knowledge_question,
         chunks=state.knowledge,

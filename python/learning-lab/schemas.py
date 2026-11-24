@@ -5,9 +5,15 @@ from typing import Any, Literal
 
 class TravelRequest(BaseModel):
     departure_city: str = Field(min_length=1)
+    destination_city: str | None = Field(default=None, min_length=1, max_length=80)
+    flight_total_cny: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    hotel_total_cny: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    daily_spending_cny: float | None = Field(default=None, ge=0, allow_inf_nan=False,
+                                             description="每天固定预留的餐饮、当地交通和活动总额")
     budget: float = Field(gt=0)
     days: int = Field(ge=1, le=30)
     interests: list[str] = Field(default_factory=list)
+    include_knowledge: bool = True
     hotel_check_in: date | None = Field(default=None, description="提供入住日期时按推荐城市查询 Hotelbeds，按一位成人一间房、days - 1 晚计算。")
     knowledge_question: str = Field(
         default="我想找当地吃饭的地方",
@@ -15,6 +21,18 @@ class TravelRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_hotel_stay(self):
+        if self.destination_city:
+            self.destination_city = self.destination_city.strip()
+            if not self.destination_city:
+                raise ValueError("目的地不能为空")
+            if self.destination_city not in {"东京", "首尔", "清迈"} and (
+                self.hotel_total_cny is None or self.flight_total_cny is None or self.daily_spending_cny is None
+            ):
+                raise ValueError("该城市支持手填预算，请填写机票、住宿和每日当地开销")
+        if (self.flight_total_cny is not None or self.hotel_total_cny is not None) and not self.destination_city:
+            raise ValueError("录入机票或住宿报价时，请指定对应目的地")
+        if self.hotel_total_cny is not None and self.days < 2:
+            raise ValueError("录入住宿费用至少需要一晚")
         if self.hotel_check_in and self.days < 2:
             raise ValueError("酒店询价至少需要一晚住宿，请设置 days >= 2")
         return self

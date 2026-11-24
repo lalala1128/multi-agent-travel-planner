@@ -170,6 +170,11 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
 
     protected = [Depends(require_api_key), Depends(enforce_rate_limit)]
 
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def trip_form():
+        page = Path(__file__).with_name("trip_form.html").read_text(encoding="utf-8")
+        return HTMLResponse(page.replace("{{key_visibility}}", "" if settings.api_key else "hidden"))
+
     @app.post(
         "/providers/hotelbeds/hotel-offers",
         response_model=HotelSearchResponse,

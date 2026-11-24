@@ -2,11 +2,36 @@ from pipeline import TravelPlanningPipeline
 from schemas import TravelRequest
 import pytest
 import travel_graph
+from pydantic import ValidationError
 
 
 @pytest.fixture(autouse=True)
 def offline_knowledge(monkeypatch):
     monkeypatch.setattr(travel_graph.knowledge_agent, "run", lambda **kwargs: [])
+
+
+@pytest.mark.parametrize("daily,budget,expected,total", [
+    (160, 3500, "over_budget", 3900), (0, 3100, "completed", 3100),
+])
+def test_personal_trip_uses_entered_prices(monkeypatch, daily, budget, expected, total):
+    def unexpected(*args, **kwargs):
+        pytest.fail("手填预算不应查询外部服务")
+    monkeypatch.setattr("hotel_agent.HotelbedsClient.search_city", unexpected)
+    monkeypatch.setattr(travel_graph.knowledge_agent, "run", unexpected)
+    monkeypatch.setattr(travel_graph.answer_agent, "run", unexpected)
+    request = TravelRequest(departure_city="北京", destination_city="厦门", budget=budget, days=5,
+                            flight_total_cny=1900, hotel_total_cny=1200, daily_spending_cny=daily,
+                            hotel_check_in="2026-12-10", include_knowledge=False)
+    result = TravelPlanningPipeline().run(request)
+    assert result.destination.city == "厦门"
+    assert result.flight.provider == result.hotel.provider == result.activity.provider == "user_input"
+    assert result.budget_result.total_cost == total and result.status == expected
+    assert result.adjustment_count == 0 and result.knowledge_answer is None
+
+
+def test_manual_price_requires_destination():
+    with pytest.raises(ValidationError):
+        TravelRequest(departure_city="北京", budget=3500, days=5, flight_total_cny=1200)
 
 
 def test_adjust_to_economy():

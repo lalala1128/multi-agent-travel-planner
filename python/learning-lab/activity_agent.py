@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from decimal import Decimal
 from schemas import (
     TravelRequest,
     DestinationRecommendation,
@@ -16,6 +18,11 @@ class ActivityAgent:
         destination: DestinationRecommendation,
         plan_type: str = "standard",
     ) -> ActivityResult:
+        if preferences.daily_spending_cny is not None:
+            daily = Decimal(str(preferences.daily_spending_cny))
+            return ActivityResult(city=destination.city, plan_type="fixed", daily_cost=daily,
+                                  total_cost=daily * preferences.days, provider="user_input",
+                                  quote_reference="user-daily-spending", quoted_at=datetime.now(UTC))
         quote = self.provider.activity(destination.city, plan_type)
 
         return ActivityResult(
