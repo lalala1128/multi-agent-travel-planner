@@ -17,6 +17,7 @@ services:
       - app_data:/app/data
       - model_cache:/app/.model_cache
       - ./knowledge:/app/knowledge:ro
+      - ./certs:/app/certs:ro
     depends_on:
       redis:
         condition: service_healthy

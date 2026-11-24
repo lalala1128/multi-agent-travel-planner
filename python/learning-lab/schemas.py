@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date, datetime
-from typing import Literal
+from decimal import Decimal
 from typing import Any, Literal
 
 class TravelRequest(BaseModel):
@@ -8,10 +8,17 @@ class TravelRequest(BaseModel):
     budget: float = Field(gt=0)
     days: int = Field(ge=1, le=30)
     interests: list[str] = Field(default_factory=list)
+    hotel_check_in: date | None = Field(default=None, description="提供入住日期时按推荐城市查询 Hotelbeds，按一位成人一间房、days - 1 晚计算。")
     knowledge_question: str = Field(
         default="我想找当地吃饭的地方",
         min_length=1,)
-    
+
+    @model_validator(mode="after")
+    def validate_hotel_stay(self):
+        if self.hotel_check_in and self.days < 2:
+            raise ValueError("酒店询价至少需要一晚住宿，请设置 days >= 2")
+        return self
+
 class DestinationRecommendation(BaseModel):
     city: str
     reason: str
@@ -23,9 +30,24 @@ class FlightResult(BaseModel):
     provider: str = "demo"
     quote_reference: str
     quoted_at: datetime
+class RankedHotel(BaseModel):
+    hotel_code: int
+    hotel_name: str
+    quote_reference: str
+    total_price: float
+    currency: str
+    total_cny: Decimal
+
+
 class HotelResult(BaseModel):
     city: str
-    price_per_night: float = Field(gt=0)
+    price_per_night: float = Field(ge=0)
+    currency: str = "CNY"
+    hotel_name: str | None = None
+    hotel_code: int | None = None
+    shortlist: list[RankedHotel] = Field(default_factory=list)
+    unpriced_offer_count: int = 0
+    conversion: "HotelConversion | None" = None
     nights: int = Field(ge=0)
     total_cost: float = Field(ge=0)
     provider: str = "demo"
@@ -56,10 +78,33 @@ class HotelSearchResponse(BaseModel):
     provider: str
     quoted_at: datetime
     offers: list[HotelOffer]
+class HotelConversion(BaseModel):
+    source_currency: str
+    cny_per_unit: Decimal = Field(gt=0)
+    rate_date: date
+    source: Literal["ECB"] = "ECB"
+    amount_cny: Decimal = Field(ge=0)
+
+
+class BudgetRound(BaseModel):
+    round_index: int = Field(ge=0)
+    activity_plan: str
+    flight_cny: Decimal
+    hotel_cny: Decimal
+    activity_cny: Decimal
+    total_cny: Decimal
+    saved_since_previous_cny: Decimal | None
+
+
 class BudgetResult(BaseModel):
-    total_cost: float = Field(ge=0)
-    remaining: float
-    within_budget: bool
+    total_cost: float | None = Field(ge=0)
+    remaining: float | None
+    within_budget: bool | None
+    currency: Literal["CNY"] = "CNY"
+    rounds: list[BudgetRound] = Field(default_factory=list)
+    hotel_budget_limit_cny: Decimal | None = Field(default=None, ge=0, description="固定本轮航班和活动后，整段住宿可用的最高金额；预算无法核算或其他费用已超预算时为空。")
+    hotel_conversion: HotelConversion | None = None
+    reason: Literal["no_hotel_offer", "currency_mismatch", "exchange_rate_unavailable"] | None = None
 class ActivityResult(BaseModel):
     city: str
     plan_type: str = "standard"

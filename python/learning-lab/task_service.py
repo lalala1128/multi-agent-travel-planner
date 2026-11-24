@@ -25,6 +25,7 @@ NODE_MESSAGES = {
     "adjust": "预算调整完成",
     "completed": "规划结果满足预算",
     "over_budget": "预算约束不可行",
+    "budget_unverified": "酒店报价或参考汇率不可用，暂无法核算总价",
     "answer": "资料摘要完成",
 }
 
@@ -38,6 +39,7 @@ def locate_failure(error: Exception, default_stage: str):
     frames = traceback.extract_tb(error.__traceback__)
     embedding_frame = any("fastembed" in Path(frame.filename).parts for frame in frames)
     stages = {
+        "hotelbeds_client.py": "hotel_availability",
         "answer_agent.py": "answer_generation",
         "knowledge_agent.py": "embedding" if embedding_frame else "knowledge_retrieval",
         "knowledge_cache.py": "knowledge_cache",

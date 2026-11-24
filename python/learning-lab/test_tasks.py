@@ -65,6 +65,9 @@ def test_submission_returns_before_execution_and_rejects_excess_tasks():
             task_id = response.json()["task_id"]
             assert entered.wait(2)
             assert client.get(f"/tasks/{task_id}").json()["status"] == "running"
+            waiting = client.get(response.json()["report_url"])
+            assert waiting.status_code == 200
+            assert "正在规划" in waiting.text and 'http-equiv="refresh"' in waiting.text
             assert client.post("/tasks", json=REQUEST).status_code == 429
         finally:
             release.set()
@@ -82,6 +85,10 @@ def test_over_budget_result_is_a_successfully_executed_task():
         assert task["status"] == "succeeded"
         assert task["result"]["status"] == "over_budget"
         assert task["error"] is None
+        report = client.get(response.json()["report_url"])
+        assert report.status_code == 200 and "text/html" in report.headers["content-type"]
+        assert "北京" in report.text and 'http-equiv="refresh"' not in report.text
+        assert client.get(f"/tasks/{uuid4()}/report").status_code == 404
         assert client.get(f"/tasks/{uuid4()}").status_code == 404
         assert client.post("/tasks", json={**REQUEST, "budget": -1}).status_code == 422
 
@@ -100,6 +107,8 @@ def test_failure_records_only_error_type():
         assert task["error_stage"] == "workflow_execution"
         assert task["error_location"].startswith("task_service.py:")
         assert "private-provider-detail" not in str(task)
+        report = client.get(response.json()["report_url"])
+        assert "规划失败" in report.text and "private-provider-detail" not in report.text
 
 
 @pytest.mark.parametrize("filename,expected_stage", [
@@ -167,6 +176,8 @@ def test_expired_records_are_not_recreated_by_updates():
 
 def test_redis_failure_prevents_submission():
     backend = Mock()
+    backend.scan_iter.return_value = iter(())
+    backend.incr.side_effect = ConnectionError("模拟 Redis 故障")
     # 创建任务已改为通过 Lua EVAL 原子写入快照与首个事件。
     backend.eval.side_effect = ConnectionError("模拟 Redis 故障")
     planner = Mock()

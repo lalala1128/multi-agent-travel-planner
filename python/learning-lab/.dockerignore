@@ -1,4 +1,8 @@
 .env
+certs/
+*.key
+*.pem
+*.csr
 .git
 .pytest_cache
 .pytest-*

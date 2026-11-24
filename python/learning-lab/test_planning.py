@@ -1,5 +1,12 @@
 from pipeline import TravelPlanningPipeline
 from schemas import TravelRequest
+import pytest
+import travel_graph
+
+
+@pytest.fixture(autouse=True)
+def offline_knowledge(monkeypatch):
+    monkeypatch.setattr(travel_graph.knowledge_agent, "run", lambda **kwargs: [])
 
 
 def test_adjust_to_economy():
@@ -42,4 +49,4 @@ def test_complete_without_adjustment():
    
     assert result.adjustment_count == 0
     assert result.budget_result.within_budget is True
-    assert result.status == "completed"   
+    assert result.status == "completed"

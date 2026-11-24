@@ -10,11 +10,12 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from redis.exceptions import RedisError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from metrics import Metrics
+from itinerary_report import render_report
 from preference_agent import PreferenceAgent
 from hotelbeds_client import (
     HotelbedsClient,
@@ -178,8 +179,9 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
         """查询 Hotelbeds 酒店可用性；只读，不发起核价或预订。"""
         try:
             return await asyncio.to_thread(HotelbedsClient().search, request)
-        except HotelbedsConfigurationError:
-            raise HTTPException(503, "Hotelbeds 凭据或 mTLS 证书尚未配置") from None
+        except HotelbedsConfigurationError as exc:
+            # 只返回配置项名称或文件状态，不返回任何密钥、密码或证书内容。
+            raise HTTPException(503, f"Hotelbeds 配置不可用：{exc}") from None
         except (HotelbedsUpstreamError, HotelbedsResponseError):
             raise HTTPException(502, "Hotelbeds 酒店报价暂不可用") from None
 
@@ -200,6 +202,7 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
         return {
             "task_id": task_id,
             "status_url": f"/tasks/{task_id}",
+            "report_url": f"/tasks/{task_id}/report",
             "events_url": f"/tasks/{task_id}/events",
         }
 
@@ -209,6 +212,10 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
         if record is None:
             raise HTTPException(404, "任务不存在或已过期")
         return record
+
+    @app.get("/tasks/{task_id}/report", response_class=HTMLResponse, dependencies=protected)
+    def task_report(task_id: UUID):
+        return HTMLResponse(render_report(get_task(task_id)), headers={"Cache-Control": "no-store"})
 
     @app.get("/tasks/{task_id}/events", dependencies=protected)
     async def stream_task_events(

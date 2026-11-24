@@ -7,7 +7,8 @@ import hashlib
 import logging
 import ssl
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 import httpx
 
@@ -45,13 +46,32 @@ class HotelbedsClient:
         }
         missing = [name for name, value in required.items() if not value]
         if missing:
-            raise HotelbedsConfigurationError("Hotelbeds 凭据未配置")
-        if self.transport is None and (
-            not self.settings.hotelbeds_client_cert
-            or not self.settings.hotelbeds_client_key
-            or not self.settings.hotelbeds_client_key_password
-        ):
-            raise HotelbedsConfigurationError("Hotelbeds mTLS 客户端证书未配置")
+            raise HotelbedsConfigurationError(f"缺少配置：{', '.join(missing)}")
+
+        if self.transport is None:
+            mtls_required = {
+                "HOTELBEDS_CLIENT_CERT": self.settings.hotelbeds_client_cert,
+                "HOTELBEDS_CLIENT_KEY": self.settings.hotelbeds_client_key,
+                "HOTELBEDS_CLIENT_KEY_PASSWORD": self.settings.hotelbeds_client_key_password,
+            }
+            missing_mtls = [name for name, value in mtls_required.items() if not value]
+            if missing_mtls:
+                raise HotelbedsConfigurationError(
+                    f"缺少 mTLS 配置：{', '.join(missing_mtls)}"
+                )
+
+            missing_files = [
+                name
+                for name, path in {
+                    "HOTELBEDS_CLIENT_CERT": self.settings.hotelbeds_client_cert,
+                    "HOTELBEDS_CLIENT_KEY": self.settings.hotelbeds_client_key,
+                }.items()
+                if not Path(path).is_file()
+            ]
+            if missing_files:
+                raise HotelbedsConfigurationError(
+                    f"证书或私钥文件不存在：{', '.join(missing_files)}"
+                )
 
     def _signature(self, timestamp: int) -> str:
         source = f"{self.settings.hotelbeds_api_key}{self.settings.hotelbeds_secret}{timestamp}"
@@ -59,11 +79,16 @@ class HotelbedsClient:
 
     def _ssl_context(self):
         context = ssl.create_default_context()
-        context.load_cert_chain(
-            certfile=self.settings.hotelbeds_client_cert,
-            keyfile=self.settings.hotelbeds_client_key,
-            password=self.settings.hotelbeds_client_key_password,
-        )
+        try:
+            context.load_cert_chain(
+                certfile=self.settings.hotelbeds_client_cert,
+                keyfile=self.settings.hotelbeds_client_key,
+                password=self.settings.hotelbeds_client_key_password,
+            )
+        except (OSError, ssl.SSLError) as exc:
+            raise HotelbedsConfigurationError(
+                "mTLS 证书与私钥无法配对，请核对证书、私钥及私钥密码"
+            ) from exc
         return context
 
     @staticmethod
@@ -114,6 +139,19 @@ class HotelbedsClient:
         return offers
 
     def search(self, request: HotelSearchRequest) -> HotelSearchResponse:
+        return self._availability(self._payload(request))
+
+    def search_city(self, city: str, check_in: date, check_out: date) -> HotelSearchResponse:
+        centers = {"首尔": (37.5665, 126.9780), "东京": (35.6812, 139.7671), "清迈": (18.7883, 98.9853)}
+        lat, lon = centers[city]
+        return self._availability({
+            "stay": {"checkIn": check_in.isoformat(), "checkOut": check_out.isoformat()},
+            "occupancies": [{"rooms": 1, "adults": 1, "children": 0}],
+            "geolocation": {"latitude": lat, "longitude": lon, "radius": 5, "unit": "km"},
+            "filter": {"maxHotels": 10},
+        })
+
+    def _availability(self, payload: dict) -> HotelSearchResponse:
         self._validate_configuration()
         timestamp = int(self.now())
         headers = {
@@ -133,7 +171,7 @@ class HotelbedsClient:
 
         try:
             with httpx.Client(**client_options) as client:
-                response = client.post("/hotel-api/1.0/hotels", headers=headers, json=self._payload(request))
+                response = client.post("/hotel-api/1.0/hotels", headers=headers, json=payload)
                 response.raise_for_status()
                 body = response.json()
         except httpx.HTTPError as error:

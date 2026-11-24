@@ -120,13 +120,27 @@ Caddy 会自动申请和续期 TLS 证书，并将 HTTPS 请求转发给 API。�
 | `GET /tasks/{task_id}/events` | 订阅 SSE 事件；支持 `Last-Event-ID` |
 | `POST /recommendations` | 同步执行入口，便于快速调试 |
 
-任务的 `status=succeeded` 代表执行成功；最终规划的 `result.status=over_budget` 代表业务上预算无解，两者并不矛盾。
+任务的 `status=succeeded` 表示流程执行成功。`result.status=over_budget` 表示当前报价和可选活动组合仍超过预算。
+
+在 Swagger 提交 `POST /tasks` 后，将响应里的 `report_url` 拼到当前服务地址即可打开可打印的中文行程单。等待中的页面每 5 秒刷新一次，完成后展示预算、住宿候选和回答所引资料。已有任务可在状态页地址末尾加 `/report`。启用 API_KEY 时，读取报告也需要 X-API-Key 请求头。
+
+在任务结果中查找 `budget_result.rounds` 可查看初始方案（第 0 轮）及每轮调整后的航班、住宿、活动费用和相对上一轮的节省额，单位为人民币。`hotel_budget_limit_cny` 是保留最终航班和活动时，整段住宿最多能花的金额。该值为 0 时只能接受免费住宿；其他费用本身已超预算或缺少可核算报价时为 null。
 
 ## Hotelbeds 真实酒店查询
+
+在 Swagger 的 `POST /tasks` 请求中加入 `hotel_check_in` 即可让规划任务查询推荐城市中心 5 公里内的酒店。例如：
+
+```json
+{"departure_city":"北京","budget":3500,"days":5,"hotel_check_in":"2026-12-10"}
+```
+
+查询按一位成人、一间房、`days - 1` 晚计算。酒店分支用同一份欧洲央行参考汇率折算本批报价的整段住宿总价，每家酒店取最低价。`result.hotel.shortlist` 按人民币总价列出最多三家，第一家进入预算回路。每项保留原币种和原价。无法折算的报价计入 `unpriced_offer_count`，全部无法折算时保留一项原价并返回 `budget_unverified`。预算调整沿用选中报价的折算金额。无房源时原因是 `no_hotel_offer`，缺少可用汇率时是 `exchange_rate_unavailable`。省略入住日期时沿用演示报价。
 
 `POST /providers/hotelbeds/hotel-offers` 接入 Hotelbeds Hotel Booking API 的只读 Availability 查询，不调用 `checkrates` 或 `bookings`，不会产生订单。请求必须带入住/离店日期、成人数及 Hotelbeds 酒店代码；返回真实供应商金额与币种，**不会直接加入当前 CNY 演示预算**，避免未接汇率服务时跨币种误算。
 
 Hotelbeds 目前要求酒店 Availability 使用 mTLS。将 API Key、Secret、客户端证书和私钥只配置在本机 `.env`，例如：
+
+Compose 将宿主机的 `certs` 目录只读挂载到 `/app/certs`。容器部署时为证书与私钥填写容器内对应路径；Windows 本地运行时填写本机路径。
 
 ```ini
 HOTELBEDS_API_KEY=...
@@ -151,6 +165,6 @@ python rag_rerank_demo.py
 
 ## 边界
 
-航班、酒店与活动工具目前使用可预测的演示数据，用于验证编排和预算回路；接入真实供应商时应通过独立适配器注入凭据、超时、限流和报价校验，不能将演示报价当作实时数据。
+航班和活动使用演示数据。酒店的来源由任务输入决定，可从 `result.hotel.provider` 查看报价来自演示适配器还是 Hotelbeds。
 
 要接入真实供应商，还需要扩展请求中的出行日期、乘客数、舱等/房型等信息，并按供应商合同实现 `quote_providers.py` 中的适配器。当前将 `TRAVEL_PROVIDER` 设置为非 `demo` 会失败关闭，防止误导用户。

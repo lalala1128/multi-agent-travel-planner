@@ -6,6 +6,8 @@
 
 [`python/learning-lab`](python/learning-lab) 是从零手写的轻量实现，保留每个机制的最小可运行代码与测试：LangGraph 并行分支和预算回路、Qdrant 城市过滤与关键词重排、文档版本去重、Redis Lua 事件、SSE 重连、模型超时重试和服务重启恢复。它与根目录的扩展版并存，不替换既有实现。
 
+在学习版 Swagger 的 `POST /tasks` 提交行程后，打开 `report_url` 可查看并打印中文行程单。配置 Hotelbeds 测试凭据并传入 `hotel_check_in` 可体验酒店询价、人民币比价和逐轮预算核算。配置与示例见[学习版使用说明](python/learning-lab/README.md)。
+
 ## 快速启动
 
 要求 Python 3.12+、uv。请在仓库根目录执行：

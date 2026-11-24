@@ -57,6 +57,8 @@ def check_budget(state: PlanningState):
     return {"budget_result": result}
 
 def route_after_budget(state: PlanningState):
+    if state.budget_result.within_budget is None:
+        return "budget_unverified"
     if state.budget_result.within_budget:
         return "completed"
 
@@ -134,6 +136,7 @@ def build_graph(
     builder.add_node("budget", tracked("budget", check_budget))
     builder.add_node("completed", tracked("completed", finish_plan))
     builder.add_node("over_budget", tracked("over_budget", report_over_budget))
+    builder.add_node("budget_unverified", tracked("budget_unverified", lambda state: {"status": "budget_unverified"}))
     builder.add_node("adjust", tracked("adjust", adjust_activity))
     builder.add_node("knowledge", tracked("knowledge", retrieve_knowledge))
     def answer_with_retry_event(state: PlanningState):
@@ -160,11 +163,13 @@ def build_graph(
             "completed": "completed",
             "adjust": "adjust",
             "over_budget": "over_budget",
+            "budget_unverified": "budget_unverified",
         },
     )
     builder.add_edge("adjust", "budget")
     builder.add_edge("completed", "answer")
     builder.add_edge("over_budget", "answer")
+    builder.add_edge("budget_unverified", "answer")
     builder.add_edge("answer", END)
 
     return builder.compile()
