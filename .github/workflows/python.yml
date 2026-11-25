@@ -28,4 +28,4 @@ jobs:
           test_reranker.py test_ingest_manifest.py test_knowledge_cache.py
           test_rate_limiter.py test_quote_providers.py test_metrics.py test_task_metrics.py
           test_embedding_settings.py test_settings.py test_hotelbeds_client.py
-          test_exchange_rates.py test_task_hotel_quotes.py test_planning.py test_tasks.py -q
+          test_exchange_rates.py test_task_hotel_quotes.py test_planning.py test_online_plan.py test_tasks.py -q

@@ -1,0 +1,45 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>定制旅行行程</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6f0;color:#173b34;font:16px/1.65 Inter,"Microsoft YaHei",sans-serif}
+main{max-width:46rem;margin:auto;padding:clamp(1.2rem,5vw,3rem);background:white;border-top:5px solid #267364}
+h1,h2,h3,p{margin:.35rem 0 .8rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.8rem}
+input,textarea,button{font:inherit}input,textarea{display:block;width:100%;padding:.55rem;border:1px solid #819e94;border-radius:.4rem}
+textarea{min-height:6rem}label{display:block;margin:.4rem 0}button{background:#195b50;color:white;border:0;border-radius:.4rem;padding:.7rem 1.2rem}
+button:disabled{opacity:.55}article{padding:1rem 0;border-top:1px solid #c7dad1}a{color:#185f52}[hidden]{display:none!important}
+</style></head><body><main><h1>定制旅行行程</h1><p>查阅在线旅行资料，按你的需求生成每天的安排。行程与预算用于出行参考。</p>
+<form id="planner"><div class="grid">
+<label>目的地<input name="city" placeholder="例如：厦门" maxlength="80" required></label>
+<label>出发城市（选填）<input name="departure" maxlength="80"></label>
+<label>出发日期（选填）<input name="start_date" type="date"></label>
+<label>天数<input name="days" type="number" min="1" max="7" value="3" required></label>
+<label>人数<input name="people" type="number" min="1" max="12" value="2" required></label>
+<label>全团预算（元，选填）<input name="budget_cny" type="number" min=".01" step=".01"></label></div>
+<label>你想怎么玩？<textarea name="needs" maxlength="800" placeholder="例如：带父母，想吃当地小吃，下午预留休息时间，尽量少走路。" required></textarea></label>
+<label {{key_visibility}}>服务访问密钥<input name="access_key" type="password" autocomplete="off"></label>
+<button>联网生成行程</button><p role="status" id="status"></p></form><section id="result"></section></main>
+<script>
+const form=document.querySelector('#planner'), statusLine=document.querySelector('#status'), result=document.querySelector('#result');
+function add(parent,tag,text){const node=document.createElement(tag);node.textContent=text;parent.append(node);return node}
+form.onsubmit=async event=>{
+  event.preventDefault();const btn=form.querySelector('button');btn.disabled=true;
+  result.replaceChildren();statusLine.textContent='正在联网查资料并生成计划，请保持页面打开…';
+  const req=Object.fromEntries(new FormData(form));const key=req.access_key;delete req.access_key;
+  if(!req.budget_cny)delete req.budget_cny;if(!req.start_date)delete req.start_date;
+  const headers={'Content-Type':'application/json'};if(key)headers['X-API-Key']=key;
+  try{
+    const r=await fetch('/mobile/plan',{method:'POST',headers,body:JSON.stringify(req)});
+    if(!r.headers.get('content-type')?.includes('application/json'))throw Error('登录可能已过期，请刷新页面后重试。');
+    const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'请检查填写的内容。');
+    add(result,'h2',req.city+' · '+req.days+' 日行程');
+    for(const [i,day] of data.plan.days.entries()){
+      const article=add(result,'article','');add(article,'h3','第 '+(i+1)+' 天');
+      for(const [label,field] of [['上午','morning'],['下午','afternoon'],['晚上','evening']])add(article,'p',label+'　'+day[field]);
+      for(const id of new Set(day.sources)){const s=data.sources.find(x=>x.id===id);const a=add(article,'a',' ['+id+'] '+s.title+' ');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer'}
+    }
+    add(result,'h3','预算安排');add(result,'p',data.plan.budget_note);
+    add(result,'h3','出行前确认');add(result,'p',data.plan.verify_before_departure);
+    statusLine.textContent='资料检索于 '+new Date(data.retrieved_at).toLocaleString();result.scrollIntoView({behavior:'smooth'});
+  }catch(e){statusLine.textContent=e.message}finally{btn.disabled=false}
+};
+</script></body></html>

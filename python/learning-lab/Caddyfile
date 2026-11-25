@@ -3,7 +3,7 @@
     basic_auth {
         import /etc/trip-auth/accounts
     }
-    @app path / /tasks /tasks/* /my/trips
+    @app path / /tasks /tasks/* /my/trips /mobile /mobile/plan
     handle @app {
         reverse_proxy api:8001 {
             header_up X-Trip-User {http.auth.user.id}

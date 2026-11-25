@@ -1,0 +1,39 @@
+{
+	admin off
+}
+http://127.0.0.1:8080 {
+	@form {
+		method GET
+		path / /mobile
+	}
+	@submit {
+		method POST
+		path /mobile/plan
+		header Content-Type application/json*
+	}
+	handle @form {
+		rewrite * /mobile
+		reverse_proxy host.docker.internal:8001 {
+			header_up Host 127.0.0.1
+			header_up -X-Trip-User
+			header_up -X-Trip-Edge-Token
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+	handle @submit {
+		request_body {
+			max_size 12KB
+		}
+		reverse_proxy host.docker.internal:8001 {
+			header_up Host 127.0.0.1
+			header_up -X-Trip-User
+			header_up -X-Trip-Edge-Token
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+	handle {
+		respond 404
+	}
+}

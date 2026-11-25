@@ -18,6 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from metrics import Metrics
 from itinerary_report import render_report
+from online_plan import OnlineRequest, OnlinePlanError, generate_online_plan
 from preference_agent import PreferenceAgent
 from hotelbeds_client import (
     HotelbedsClient,
@@ -186,6 +187,25 @@ def create_app(store=None, planner=None, max_pending: int | None = None):
         )
 
     protected = [Depends(require_api_key), Depends(enforce_rate_limit)]
+
+    mobile_slots = asyncio.Semaphore(2)
+
+    @app.get("/mobile", response_class=HTMLResponse, include_in_schema=False)
+    def mobile_form(owner: str | None = Depends(trip_owner)):
+        page = Path(__file__).with_name("mobile_plan.html").read_text(encoding="utf-8")
+        return HTMLResponse(page.replace("{{key_visibility}}", "" if settings.api_key and not owner else "hidden"))
+
+    @app.post("/mobile/plan", dependencies=protected)
+    async def mobile_plan(req: OnlineRequest):
+        if mobile_slots.locked():
+            raise HTTPException(429, "正在为其他旅客规划，请稍后再试。")
+        async with mobile_slots:
+            try:
+                return await asyncio.wait_for(generate_online_plan(req), timeout=90)
+            except OnlinePlanError as error:
+                raise HTTPException(502, str(error)) from None
+            except TimeoutError:
+                raise HTTPException(504, "规划超时，请稍后重试。") from None
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def trip_form(owner: str | None = Depends(trip_owner)):
