@@ -17,19 +17,50 @@ button:disabled{opacity:.55}article{padding:1rem 0;border-top:1px solid #c7dad1}
 <label>全团预算（元，选填）<input name="budget_cny" type="number" min=".01" step=".01"></label></div>
 <label>你想怎么玩？<textarea name="needs" maxlength="800" placeholder="例如：带父母，想吃当地小吃，下午预留休息时间，尽量少走路。" required></textarea></label>
 <label {{key_visibility}}>服务访问密钥<input name="access_key" type="password" autocomplete="off"></label>
-<button>联网生成行程</button><p role="status" id="status"></p></form><section id="result"></section></main>
+<button>联网生成行程</button><p role="status" id="status"></p><a id="reopen" href="" hidden>重新打开表单</a></form><section id="result"></section></main>
 <script>
 const form=document.querySelector('#planner'), statusLine=document.querySelector('#status'), result=document.querySelector('#result');
 function add(parent,tag,text){const node=document.createElement(tag);node.textContent=text;parent.append(node);return node}
+const reopen = document.querySelector('#reopen');
+const draftKey = 'travel.mobile.form.v1';
+const fields = ['city','departure','start_date','days','people','budget_cny','needs'];
+try {
+  const draft = JSON.parse(sessionStorage.getItem(draftKey));
+  for (const field of fields) {
+    if (typeof draft?.[field] === 'string') form.elements[field].value = draft[field];
+  }
+} catch {}
+function saveDraft() {
+  const draft = Object.fromEntries(fields.map(field => [field, form.elements[field].value]));
+  try { sessionStorage.setItem(draftKey, JSON.stringify(draft)); } catch {}
+}
+form.addEventListener('input', saveDraft);
+function responseError(r) {
+  if (r.type === 'opaqueredirect' || r.status === 401) {
+    reopen.hidden = false;
+    return '入口要求重新验证。请在本标签页重新打开表单，完成邮箱验证后再提交。';
+  }
+  if (r.status === 403) return '入口拒绝了提交（HTTP 403）。请确认使用获准邮箱，在系统浏览器中打开预览。';
+  if (r.status === 404 || r.status === 405) return '这个地址无法提交行程（HTTP '+r.status+'）。请从最新的手机规划链接进入。';
+  if (r.status === 429) return '当前请求过多（HTTP 429），请稍后再试。';
+  if (r.status >= 500) return '规划服务或预览隧道暂不可用（HTTP '+r.status+'）。请稍后重试。';
+  return '入口返回了意外的页面（HTTP '+r.status+'）。请从最新的手机规划链接进入。';
+}
 form.onsubmit=async event=>{
   event.preventDefault();const btn=form.querySelector('button');btn.disabled=true;
+  saveDraft();reopen.hidden=true;
   result.replaceChildren();statusLine.textContent='正在联网查资料并生成计划，请保持页面打开…';
   const req=Object.fromEntries(new FormData(form));const key=req.access_key;delete req.access_key;
   if(!req.budget_cny)delete req.budget_cny;if(!req.start_date)delete req.start_date;
-  const headers={'Content-Type':'application/json'};if(key)headers['X-API-Key']=key;
+  const headers={'Content-Type':'application/json','Accept':'application/json'};if(key)headers['X-API-Key']=key;
   try{
-    const r=await fetch('/mobile/plan',{method:'POST',headers,body:JSON.stringify(req)});
-    if(!r.headers.get('content-type')?.includes('application/json'))throw Error('登录可能已过期，请刷新页面后重试。');
+    let r;
+    try {
+      r=await fetch('/mobile/plan',{method:'POST',headers,body:JSON.stringify(req),credentials:'same-origin',redirect:'manual',cache:'no-store'});
+    } catch {
+      throw Error('无法连接到预览入口。请检查网络后重试。');
+    }
+    if(!r.headers.get('content-type')?.includes('application/json'))throw Error(responseError(r));
     const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'请检查填写的内容。');
     add(result,'h2',req.city+' · '+req.days+' 日行程');
     for(const [i,day] of data.plan.days.entries()){
