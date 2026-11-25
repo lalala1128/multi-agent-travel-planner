@@ -6,7 +6,7 @@ main{max-width:46rem;margin:auto;padding:clamp(1.2rem,5vw,3rem);background:white
 h1,h2,h3,p{margin:.35rem 0 .8rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.8rem}
 input,textarea,button{font:inherit}input,textarea{display:block;width:100%;padding:.55rem;border:1px solid #819e94;border-radius:.4rem}
 textarea{min-height:6rem}label{display:block;margin:.4rem 0}button{background:#195b50;color:white;border:0;border-radius:.4rem;padding:.7rem 1.2rem}
-button:disabled{opacity:.55}article{padding:1rem 0;border-top:1px solid #c7dad1}a{color:#185f52}[hidden]{display:none!important}
+button:disabled{opacity:.55}.candidate{padding:.8rem;margin:.7rem 0;background:#f3f6f0;border-radius:.5rem}.stop{padding:.7rem 0;border-bottom:1px solid #ddd}small{display:block;color:#49665d}article{padding:1rem 0;border-top:1px solid #c7dad1}a{color:#185f52}[hidden]{display:none!important}
 </style></head><body><main><h1>定制旅行行程</h1><p>查阅在线旅行资料，按你的需求生成每天的安排。行程与预算用于出行参考。</p>
 <form id="planner"><div class="grid">
 <label>目的地<input name="city" placeholder="例如：厦门" maxlength="80" required></label>
@@ -63,12 +63,68 @@ form.onsubmit=async event=>{
     if(!r.headers.get('content-type')?.includes('application/json'))throw Error(responseError(r));
     const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'请检查填写的内容。');
     add(result,'h2',req.city+' · '+req.days+' 日行程');
-    for(const [i,day] of data.plan.days.entries()){
-      const article=add(result,'article','');add(article,'h3','第 '+(i+1)+' 天');
-      for(const [label,field] of [['上午','morning'],['下午','afternoon'],['晚上','evening']])add(article,'p',label+'　'+day[field]);
-      for(const id of new Set(day.sources)){const s=data.sources.find(x=>x.id===id);const a=add(article,'a',' ['+id+'] '+s.title+' ');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer'}
+    function sourceLinks(parent, ids) {
+      for (const id of new Set(ids)) {
+        const source = data.sources.find(item => item.id === id);
+        if (!source) continue;
+        const link = add(parent,'a',' ['+id+'] '+source.title+' ');
+        link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';
+      }
     }
-    add(result,'h3','预算安排');add(result,'p',data.plan.budget_note);
+    function money(amount,currency='CNY') {
+      return amount == null ? '待查询' : new Intl.NumberFormat('zh-CN',{style:'currency',currency}).format(amount);
+    }
+    add(result,'h3','酒店候选');
+    const hotels=data.candidates.hotels;
+    add(result,'p',hotels.message+(hotels.environment?' · '+hotels.environment:''));
+    for(const item of hotels.offers || []) {
+      const card=add(result,'div','');card.className='candidate';
+      add(card,'h3',item.hotel_name);
+      add(card,'p',item.check_in+' 入住 → '+item.check_out+' 离店 · '+item.nights+' 晚');
+      add(card,'p',item.room_name+' · '+item.rooms+' 间 · 每间 '+item.adults_per_room+' 位成人 · '+item.board);
+      add(card,'p','整段供应商净报价 '+item.total_price+' '+item.currency+' · 每间每晚均价 '+item.per_room_night+' '+item.currency);
+      add(card,'p',item.total_cny==null?'人民币折算暂不可用':'人民币参考 '+item.total_cny+' 元'+(item.rate_date?' · 汇率日 '+item.rate_date:''));
+      add(card,'small','查询时间 '+new Date(item.quoted_at).toLocaleString()+' · 最终售价及税费需核价');
+    }
+    add(result,'h3','航班候选');
+    const flights=data.candidates.flights;
+    add(result,'p',flights.message+(flights.environment==='test'?' · 测试报价':''));
+    for(const item of flights.items || []) {
+      const card=add(result,'div','');card.className='candidate';
+      add(card,'strong',item.people+' 人往返 '+item.total_price+' '+item.currency);
+      for(const [i,part] of item.slices.entries()) {
+        add(card,'p',i===0?'去程':'返程');
+        for(const segment of part) add(card,'p',segment.airline+' '+segment.flight+' · '+segment.origin+' '+segment.departure+' → '+segment.destination+' '+segment.arrival);
+      }
+    }
+    add(result,'h3','景点候选');
+    for(const item of data.plan.attractions) {
+      const card=add(result,'div','');card.className='candidate';
+      add(card,'h3',item.id+' · '+item.name);
+      add(card,'p',item.address+' · 建议游览 '+item.suggested_minutes+' 分钟');
+      add(card,'p','成人参考门票 '+money(item.price_cny)+' · '+item.price_basis);
+      add(card,'p','开放时间　'+item.opening_hours);
+      add(card,'p','预约　'+item.booking);
+      sourceLinks(card,item.sources);
+    }
+    for(const [i,day] of data.plan.days.entries()) {
+      const article=add(result,'article','');add(article,'h3','第 '+(i+1)+' 天'+(day.date?' · '+day.date:'')+' · 建议时间表');
+      for(const stop of day.stops) {
+        const row=add(article,'div','');row.className='stop';
+        add(row,'strong',stop.start+'–'+stop.end+'　'+stop.place);
+        add(row,'p',stop.activity);
+        add(row,'small','到达方式　'+stop.transport);
+        add(row,'small','全团本时段参考费用　'+money(stop.estimated_cost_cny)+(stop.attraction_id?' · 对应候选 '+stop.attraction_id:' · 预算估算'));
+      }
+      sourceLinks(article,day.sources);
+    }
+    add(result,'h3','预算安排');
+    if(data.budget) {
+      add(result,'p','已列活动、餐饮与市内交通估算 '+money(data.budget.activity_and_local_estimate_cny)+' / 全团');
+      add(result,'p','候选酒店最低参考 '+money(data.budget.lowest_hotel_reference_cny)+' / 整段住宿');
+      add(result,'p',data.budget.message);
+    }
+    add(result,'p',data.plan.budget_note);
     add(result,'h3','出行前确认');add(result,'p',data.plan.verify_before_departure);
     statusLine.textContent='资料检索于 '+new Date(data.retrieved_at).toLocaleString();result.scrollIntoView({behavior:'smooth'});
   }catch(e){statusLine.textContent=e.message}finally{btn.disabled=false}

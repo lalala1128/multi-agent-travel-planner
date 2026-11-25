@@ -87,6 +87,10 @@ class HotelSearchRequest(BaseModel):
 class HotelOffer(BaseModel):
     hotel_code: int
     hotel_name: str
+    room_name: str = "供应商未提供"
+    board: str = "供应商未提供"
+    rooms: int = Field(default=1, ge=1)
+    adults_per_room: int = Field(default=1, ge=1)
     total_price: float = Field(ge=0)
     currency: str
     rate_type: str | None = None

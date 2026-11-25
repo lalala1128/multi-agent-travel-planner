@@ -131,6 +131,10 @@ class HotelbedsClient:
                     offers.append(HotelOffer(
                         hotel_code=hotel_code,
                         hotel_name=hotel_name,
+                        room_name=str(room.get("name") or room.get("code") or "供应商未提供"),
+                        board=str(rate.get("boardName") or "供应商未提供"),
+                        rooms=int(rate.get("rooms", 1)),
+                        adults_per_room=int(rate.get("adults", 1)),
                         total_price=amount,
                         currency=str(rate.get("currency") or hotel.get("currency") or "UNKNOWN"),
                         rate_type=rate.get("rateType"),
@@ -144,9 +148,15 @@ class HotelbedsClient:
     def search_city(self, city: str, check_in: date, check_out: date) -> HotelSearchResponse:
         centers = {"首尔": (37.5665, 126.9780), "东京": (35.6812, 139.7671), "清迈": (18.7883, 98.9853)}
         lat, lon = centers[city]
+        return self.search_area(lat, lon, check_in, check_out, 1)
+
+    def search_area(self, lat: float, lon: float, check_in: date, check_out: date, people: int):
+        # 查询一种房型的整段住宿价，避免把不同入住组合的单项成本当作全团报价。
+        adults = 2 if people % 2 == 0 else (3 if people % 3 == 0 else 1)
+        occupancies = [{"rooms": people // adults, "adults": adults, "children": 0}]
         return self._availability({
             "stay": {"checkIn": check_in.isoformat(), "checkOut": check_out.isoformat()},
-            "occupancies": [{"rooms": 1, "adults": 1, "children": 0}],
+            "occupancies": occupancies,
             "geolocation": {"latitude": lat, "longitude": lon, "radius": 5, "unit": "km"},
             "filter": {"maxHotels": 10},
         })
