@@ -105,3 +105,21 @@ def test_flight_payload_and_price_scope(monkeypatch):
     assert result["environment"] == "test"
     assert result["items"][0]["total_price"] == 1200
     assert result["items"][0]["people"] == 2
+
+
+def test_flight_auth_error_is_explained(monkeypatch):
+    from online_candidates import flight_candidates
+    monkeypatch.setenv("DUFFEL_ACCESS_TOKEN", "duffel_test_mock")
+
+    def handle(request):
+        return httpx.Response(401, request=request, json={"error": {"message": "invalid"}})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            return await flight_candidates(client, OnlineRequest(
+                city="厦门", departure="上海", days=2, people=1,
+                start_date="2026-12-01", needs="轻松旅行"))
+
+    result = asyncio.run(run())
+    assert result["status"] == "error"
+    assert "令牌无效" in result["message"]

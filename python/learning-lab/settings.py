@@ -38,6 +38,7 @@ class Settings:
     hotelbeds_client_key: str | None
     hotelbeds_client_key_password: str | None
     hotelbeds_timeout_seconds: float
+    duffel_access_token: str | None
 
 
 def load_settings() -> Settings:
@@ -79,4 +80,5 @@ def load_settings() -> Settings:
         hotelbeds_client_key=os.getenv("HOTELBEDS_CLIENT_KEY") or None,
         hotelbeds_client_key_password=os.getenv("HOTELBEDS_CLIENT_KEY_PASSWORD") or None,
         hotelbeds_timeout_seconds=float(os.getenv("HOTELBEDS_TIMEOUT_SECONDS", "15")),
+        duffel_access_token=os.getenv("DUFFEL_ACCESS_TOKEN") or None,
     )

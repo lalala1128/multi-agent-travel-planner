@@ -2,12 +2,11 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-import os
-
 import httpx
 
 from exchange_rates import fetch_daily_rates
 from hotelbeds_client import HotelbedsClient, HotelbedsConfigurationError, HotelbedsUpstreamError, HotelbedsResponseError
+from settings import load_settings
 
 CENTERS = {"厦门": (24.4798,118.0894), "上海":(31.2304,121.4737), "北京":(39.9042,116.4074),
            "杭州":(30.2741,120.1551), "成都":(30.5728,104.0668), "广州":(23.1291,113.2644),
@@ -57,7 +56,7 @@ def hotel_candidates(req):
 
 async def flight_candidates(client, req):
     result = {"status":"unavailable","message":"航班实时查询尚未配置供应商账号。","items":[]}
-    token = os.getenv("DUFFEL_ACCESS_TOKEN")
+    token = load_settings().duffel_access_token
     if not token:
         return result
     if not req.start_date or not req.departure:
@@ -87,8 +86,18 @@ async def flight_candidates(client, req):
             result["items"].append({"id":"F"+str(len(result["items"])+1),"total_price":float(offer["total_amount"]),
                 "currency":offer["total_currency"],"people":req.people,"price_basis":"全体成人往返含税总价",
                 "slices":slices,"expires_at":offer["expires_at"],"quoted_at":datetime.now(UTC).isoformat()})
+    except httpx.HTTPStatusError as error:
+        status = error.response.status_code
+        if status in {401, 403}:
+            result["message"] = "Duffel 令牌无效或权限不足，请检查 .env 后重启 API。"
+        elif status == 422:
+            result["message"] = "航班查询参数未被供应商接受，请检查日期、机场和人数。"
+        else:
+            result["message"] = f"航班供应商返回 HTTP {status}，请稍后重试。"
+        result["status"] = "error"
+        return result
     except (httpx.HTTPError,ValueError,KeyError,TypeError):
-        result.update(message="航班供应商本次未返回可解析的报价。",items=[])
+        result.update(status="error", message="航班供应商本次未返回可解析的报价。",items=[])
         return result
     result.update(status="ok" if result["items"] else "empty",message="按日期和人数查询的往返经济舱候选。")
     return result
