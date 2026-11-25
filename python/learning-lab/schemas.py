@@ -156,6 +156,7 @@ class PlanningState(BaseModel):
 
 class TaskRecord(BaseModel):
     id: str
+    owner: str | None = None
     status: Literal["queued", "running", "succeeded", "failed"] = "queued"
     request: TravelRequest
     result: PlanningState | None = None

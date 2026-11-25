@@ -1,4 +1,18 @@
 {$DOMAIN} {
     encode zstd gzip
-    reverse_proxy api:8001
+    basic_auth {
+        import /etc/trip-auth/accounts
+    }
+    @app path / /tasks /tasks/* /my/trips
+    handle @app {
+        reverse_proxy api:8001 {
+            header_up X-Trip-User {http.auth.user.id}
+            header_up X-Trip-Edge-Token {env.TRIP_EDGE_TOKEN}
+            header_up -Authorization
+            header_up -X-API-Key
+        }
+    }
+    handle {
+        respond 404
+    }
 }

@@ -23,6 +23,7 @@ class Settings:
     cache_ttl_seconds: int
     task_max_pending: int
     api_key: str | None
+    trip_edge_token: str | None
     cors_origins: list[str]
     embedding_local_files_only: bool
     embedding_cache_dir: str | None
@@ -63,6 +64,7 @@ def load_settings() -> Settings:
         cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "600")),
         task_max_pending=int(os.getenv("TASK_MAX_PENDING", "8")),
         api_key=os.getenv("API_KEY") or None,
+        trip_edge_token=os.getenv("TRIP_EDGE_TOKEN") or None,
         cors_origins=origins,
         embedding_local_files_only=env_bool("EMBEDDING_LOCAL_FILES_ONLY", True),
         embedding_cache_dir=os.getenv("EMBEDDING_CACHE_DIR") or None,

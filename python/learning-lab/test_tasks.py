@@ -48,6 +48,36 @@ def test_task_store_preserves_data_and_ttl():
         store.close()
 
 
+def test_personal_library_and_resource_ownership(monkeypatch):
+    token = "local-test-token-" * 3
+    monkeypatch.setenv("TRIP_EDGE_TOKEN", token)
+    alice = {"X-Trip-User": "alice", "X-Trip-Edge-Token": token}
+    bob = {**alice, "X-Trip-User": "bob"}
+    store = make_store()
+
+    class Planner:
+        def run(self, request):
+            return PlanningState(preferences=request, status="completed")
+
+    legacy = store.create(TravelRequest(**REQUEST))
+    with TestClient(create_app(store, Planner())) as client:
+        assert client.get("/my/trips").status_code == 401
+        assert client.get("/my/trips", headers={"X-Trip-User":"alice"}).status_code == 401
+        assert client.get(f"/tasks/{legacy.id}", headers=alice).status_code == 404
+        created = client.post("/tasks", json=REQUEST, headers=alice).json()
+        for _ in range(100):
+            if client.get(created["status_url"], headers=alice).json()["status"] == "succeeded":
+                break
+            time.sleep(.01)
+        assert created["report_url"] in client.get("/my/trips", headers=alice).text
+        assert created["report_url"] not in client.get("/my/trips", headers=bob).text
+        for key in ("report_url", "status_url", "events_url"):
+            assert client.get(created[key], headers=bob).status_code == 404
+        assert store.client.ttl(store.key(created["task_id"])) == -1
+        assert store.client.ttl(store.events_key(created["task_id"])) > 0
+        assert client.get(created["report_url"], headers=alice).status_code == 200
+
+
 def test_submission_returns_before_execution_and_rejects_excess_tasks():
     entered = Event()
     release = Event()

@@ -86,13 +86,13 @@ class TaskService:
                 },
             )
 
-    def submit(self, request: TravelRequest):
+    def submit(self, request: TravelRequest, owner: str | None = None):
         if self.closed:
             raise RuntimeError("任务执行器已关闭")
         if not self.slots.acquire(blocking=False):
             raise TaskCapacityError("运行和排队的任务已达到上限")
         try:
-            record = self.store.create(request)
+            record = self.store.create(request, owner=owner)
             future = self.executor.submit(self._execute, record)
         except Exception:
             self.slots.release()

@@ -47,12 +47,16 @@ services:
 
   caddy:
     image: caddy:2.10-alpine
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      TRIP_EDGE_TOKEN: ${TRIP_EDGE_TOKEN:-}
     profiles: ["edge"]
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./trip-auth:/etc/trip-auth:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

@@ -5,6 +5,7 @@ data/
 .pytest_cache/
 .pytest-*/
 certs/
+trip-auth/
 *.pem
 *.key
 *.crt

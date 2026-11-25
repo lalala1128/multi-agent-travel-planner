@@ -34,6 +34,10 @@ local event = cjson.decode(ARGV[2])
 event["id"] = event_id
 
 redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[3], "XX")
+if #KEYS == 4 then
+    redis.call("PERSIST", KEYS[1])
+    redis.call("ZADD", KEYS[4], ARGV[4], ARGV[5])
+end
 redis.call("RPUSH", KEYS[3], cjson.encode(event))
 redis.call("EXPIRE", KEYS[2], ARGV[3])
 redis.call("EXPIRE", KEYS[3], ARGV[3])
@@ -90,10 +94,11 @@ class TaskStore:
     def events_key(task_id: str):
         return f"travel-agent-lab:task:{task_id}:events"
 
-    def create(self, request: TravelRequest) -> TaskRecord:
+    def create(self, request: TravelRequest, owner: str | None = None) -> TaskRecord:
         now = datetime.now(timezone.utc)
         record = TaskRecord(
             id=str(uuid4()),
+            owner=owner,
             request=request,
             created_at=now,
             updated_at=now,
@@ -138,15 +143,15 @@ class TaskStore:
             created_at=now,
         ).model_dump(mode="json", exclude={"id"})
 
+        keys = [self.key(record.id), self.event_sequence_key(record.id), self.events_key(record.id)]
+        if record.owner and event == "succeeded" and record.status == "succeeded":
+            keys.append(self.library_key(record.owner))
         raw_event = self.client.eval(
-            SAVE_WITH_EVENT_LUA,
-            3,
-            self.key(record.id),
-            self.event_sequence_key(record.id),
-            self.events_key(record.id),
+            SAVE_WITH_EVENT_LUA, len(keys), *keys,
             record.model_dump_json(),
             json.dumps(event_without_id, ensure_ascii=False),
             self.ttl,
+            now.timestamp(), record.id,
         )
         if raw_event is None:
             raise LookupError("任务记录已过期，无法更新")
@@ -185,6 +190,18 @@ class TaskStore:
     def get(self, task_id: str) -> TaskRecord | None:
         raw = self.client.get(self.key(task_id))
         return TaskRecord.model_validate_json(raw) if raw is not None else None
+
+    @staticmethod
+    def library_key(owner: str) -> str:
+        return f"travel-agent-lab:library:{owner}"
+
+    def saved_trips(self, owner: str, offset: int, limit: int) -> list[TaskRecord]:
+        ids = self.client.zrevrange(self.library_key(owner), offset, offset + limit - 1)
+        if not ids:
+            return []
+        records = [TaskRecord.model_validate_json(raw) for raw in
+                   self.client.mget([self.key(task_id) for task_id in ids]) if raw]
+        return [record for record in records if record.owner == owner]
 
     def list_events(self, task_id: str, after_id: int = 0) -> list[TaskEvent]:
         if after_id < 0:

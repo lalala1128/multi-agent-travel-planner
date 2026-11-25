@@ -105,13 +105,21 @@ X-API-Key: <你的 API_KEY>
 
 ### HTTPS 与域名
 
-默认 Compose 仅把 API 绑定在本机 `127.0.0.1:8001`。有可公开访问的域名、DNS A/AAAA 记录和开放的 80/443 端口时，填写 `.env` 的 `DOMAIN`，再启用 Caddy 配置文件：
+默认 Compose 仅把 API 绑定在本机 `127.0.0.1:8001`。为小团队开放手机访问时，在有公网 IP 的服务器上部署，域名解析到该服务器，开放 TCP 80/443。在部署目录按以下步骤配置：
+
+1. 在服务端 `.env` 填写 `DOMAIN`、`ALLOWED_HOSTS`（域名和 localhost）和 `CORS_ALLOW_ORIGINS=https://你的域名`。运行 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成一个随机值并在服务器本地填入 `TRIP_EDGE_TOKEN`。这个值只供代理和 API 共用。
+2. 在 Compose 所在目录创建 `trip-auth/accounts` 文本文件，每行一个账户，格式为「用户名 空格 bcrypt 哈希」。用户名使用 1–64 个英文字母、数字、下划线或连字符。每位用户单独运行 `docker run --rm -it caddy:2.10-alpine caddy hash-password`，交互输入密码，将输出的哈希按原样写入文件。此目录已从 Git 和镜像构建排除。不要把某人的用户名重新分配给其他人。
+3. 检查配置并启动。在手机浏览器打开 `https://你的域名/`，用个人用户名和密码登录。后续增减账户后运行 `docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`。
 
 ```powershell
-docker compose --profile edge up -d
+docker compose --profile edge config --quiet
+docker compose --profile edge run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+docker compose --profile edge up -d --build
 ```
 
 Caddy 会自动申请和续期 TLS 证书，并将 HTTPS 请求转发给 API。公网环境还应将 `ALLOWED_HOSTS` 设为真实域名，将 `CORS_ALLOW_ORIGINS` 设为实际前端来源。`.env` 只适合本地或单机部署；云环境应由平台的 Secret Manager 在运行时注入同名环境变量，绝不能写入镜像或提交 Git。
+
+个人账户成功完成的任务快照和“我的行程”索引保存在 Redis 持久卷，事件按原 TTL 过期。换设备后用同一账户可继续查看。定期备份 Redis 数据卷；删除数据卷会丢失行程。此前本机匿名记录保留原有效期，账户无法认领它们。
 
 ## 异步任务接口
 

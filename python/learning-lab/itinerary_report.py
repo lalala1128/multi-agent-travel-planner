@@ -80,6 +80,7 @@ def render_report(record: TaskRecord) -> str:
         body = f"<p>从 {escape(plan.preferences.departure_city)} 出发</p>" + "".join(plan_sections(plan))
     else:
         body = "<p>暂无规划结果。</p>"
+    library = ' · <a href="/my/trips">我的行程</a>' if record.owner else ''
     return f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}<title>{escape(title)}</title>
 <style>
@@ -90,4 +91,4 @@ table{{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}}td
 th{{background:#edf4f0}}summary{{cursor:pointer}}a{{color:#176258}}footer{{margin-top:2rem}}
 @media print{{main{{margin:0;max-width:none;padding:0;border:0}}footer{{display:none}}tr{{break-inside:avoid}}}}
 </style></head><body><main><h1>{escape(title)}</h1>{body}
-<footer><a href="/">新建旅行预算</a> · <a href="/tasks/{escape(record.id, quote=True)}">查看原始任务数据</a></footer></main></body></html>"""
+<footer><a href="/">新建旅行预算</a>{library} · <a href="/tasks/{escape(record.id, quote=True)}">查看原始任务数据</a></footer></main></body></html>"""
